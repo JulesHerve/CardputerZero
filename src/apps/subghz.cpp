@@ -80,20 +80,22 @@ void selectBand(uint32_t hz) {
 // (the Cap's clone reports an unlisted version). Requires -DRADIOLIB_GODMODE=1
 // so the normally-protected internals are reachable.
 int16_t cc1101BeginNoVersionCheck(const ConfigFSK_t& cfg_) {
+    // Nothing here captures a return value: some of these internals return void
+    // in the released RadioLib (e.g. Module::init()), so assigning them would
+    // not compile. We simply replay beginCommon's register writes.
     Module* m = g_radio.getMod();
     m->spiConfig.cmds[RADIOLIB_MODULE_SPI_COMMAND_READ]  = RADIOLIB_CC1101_CMD_READ;
     m->spiConfig.cmds[RADIOLIB_MODULE_SPI_COMMAND_WRITE] = RADIOLIB_CC1101_CMD_WRITE;
-    int16_t st = m->init();
-    if (st != RADIOLIB_ERR_NONE) return st;
+    m->init();
     m->hal->pinMode(m->getIrq(), m->hal->GpioModeInput);
 
     // --- no version gate here ---
-    st = g_radio.config();                                      if (st != RADIOLIB_ERR_NONE) return st;
-    st = g_radio.setFrequency(cfg_.frequency);                  if (st != RADIOLIB_ERR_NONE) return st;
-    st = g_radio.setBitRate(cfg_.bitRate);                      if (st != RADIOLIB_ERR_NONE) return st;
-    st = g_radio.setRxBandwidth(cfg_.receiverBandwidth);        if (st != RADIOLIB_ERR_NONE) return st;
-    st = g_radio.setFrequencyDeviation(cfg_.frequencyDeviation);if (st != RADIOLIB_ERR_NONE) return st;
-    st = g_radio.setOutputPower(cfg_.power);                    if (st != RADIOLIB_ERR_NONE) return st;
+    g_radio.config();
+    g_radio.setFrequency(cfg_.frequency);
+    g_radio.setBitRate(cfg_.bitRate);
+    g_radio.setRxBandwidth(cfg_.receiverBandwidth);
+    g_radio.setFrequencyDeviation(cfg_.frequencyDeviation);
+    g_radio.setOutputPower(cfg_.power);
     g_radio.variablePacketLengthMode();
     g_radio.setPreambleLength(cfg_.preambleLength, cfg_.preambleLength - 4);
     g_radio.setDataShaping(RADIOLIB_SHAPING_NONE);
