@@ -15,6 +15,7 @@ enum class Special { Enter, Up, Down, Left, Right };
 void begin();                 // init BLE + HID + start advertising
 void end();                   // stop (BLE teardown is done by the caller)
 bool isConnected();
-void writeAscii(uint8_t c);   // a printable ASCII char
+void writeAscii(uint8_t c);   // a printable ASCII char (only sent if connected)
 void writeSpecial(Special s); // Enter / arrow keys
+int  sentCount();             // how many keystrokes were actually sent
 }  // namespace blekbd

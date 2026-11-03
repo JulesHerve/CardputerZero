@@ -7,16 +7,23 @@
 
 namespace {
 BleKeyboard g_kb("CardputerZero", "CardputerZero", 100);
+int g_sent = 0;
 }
 
 namespace blekbd {
 
-void begin()        { g_kb.begin(); }
+void begin()        { g_sent = 0; g_kb.begin(); }
 void end()          { g_kb.end(); }
 bool isConnected()  { return g_kb.isConnected(); }
-void writeAscii(uint8_t c) { g_kb.write(c); }
+int  sentCount()    { return g_sent; }
+
+void writeAscii(uint8_t c) {
+    if (!g_kb.isConnected()) return;
+    g_kb.write(c); g_sent++;
+}
 
 void writeSpecial(Special s) {
+    if (!g_kb.isConnected()) return;
     switch (s) {
         case Special::Enter: g_kb.write(KEY_RETURN);      break;
         case Special::Up:    g_kb.write(KEY_UP_ARROW);    break;
@@ -24,6 +31,7 @@ void writeSpecial(Special s) {
         case Special::Left:  g_kb.write(KEY_LEFT_ARROW);  break;
         case Special::Right: g_kb.write(KEY_RIGHT_ARROW); break;
     }
+    g_sent++;
 }
 
 }  // namespace blekbd

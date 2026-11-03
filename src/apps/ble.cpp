@@ -86,15 +86,28 @@ void Ble::kbStart() {
 }
 
 void Ble::kbDraw(bool linked) {
+    auto& d = M5Cardputer.Display;
     UI::clear();
     UI::header("BLE keyboard", linked ? "linked" : "pairing");
-    if (linked) UI::banner("Connected.\nType - keys go to your device.", UI::cAccent());
-    else        UI::banner("Pair \"CardputerZero\"\nfrom your device's BT menu", UI::cDim());
+    d.setFont(&fonts::Font2);
+    d.setTextDatum(top_left);
+    int y = 26;
+    if (linked) {
+        d.setTextColor(UI::cAccent(), UI::cBg());
+        d.drawString("Connected - type away", 8, y); y += 20;
+    } else {
+        d.setTextColor(UI::cDim(), UI::cBg());
+        d.drawString("Pair \"CardputerZero\"", 8, y); y += 18;
+        d.drawString("from the BT menu", 8, y); y += 20;
+    }
+    char l[32]; snprintf(l, sizeof(l), "keys sent: %d", blekbd::sentCount());
+    d.setFont(&fonts::Font0); d.setTextColor(UI::cText(), UI::cBg());
+    d.drawString(l, 8, y);
     UI::footer("[`] back   type to send");
 }
 
 void Ble::kbKey(const core::KeyEvent& ev) {
-    if (!g_kbUp || !blekbd::isConnected()) return;
+    if (!g_kbUp) return;
     switch (ev.key) {
         case Key::Ok:    blekbd::writeSpecial(blekbd::Special::Enter); break;
         case Key::Up:    blekbd::writeSpecial(blekbd::Special::Up);    break;
@@ -132,10 +145,13 @@ core::Signal Ble::onTick(const core::KeyEvent& ev) {
 
     case View::Keyboard: {
         if (ev.key == Key::Back) { stopAllBle(); _view = View::Menu; _menu.draw("BLE"); break; }
-        static bool lastLinked = false;
-        bool linked = g_kbUp && blekbd::isConnected();
+        static bool lastLinked = false; static int lastSent = -1;
         if (ev.key != Key::None) kbKey(ev);     // send the keystroke
-        if (linked != lastLinked) { lastLinked = linked; kbDraw(linked); }
+        bool linked = g_kbUp && blekbd::isConnected();
+        int  sent   = blekbd::sentCount();
+        if (linked != lastLinked || sent != lastSent) {
+            lastLinked = linked; lastSent = sent; kbDraw(linked);
+        }
         break;
     }
     }

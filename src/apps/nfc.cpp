@@ -68,8 +68,10 @@ bool Nfc::ensureReader() {
     SpiBus::claim(SpiBus::Owner::Nfc);
     if (!g_begun) {
         // SPI mode 1 @ 10 MHz, exactly as M5Stack's CapCC1101 examples use.
-        bool ok = m5::unit::wiring::addSPI(g_units, g_unit, 10000000, 1) && g_units.begin();
-        g_begun = ok;
+        bool wired = m5::unit::wiring::addSPI(g_units, g_unit, 10000000, 1);
+        bool begun = wired && g_units.begin();
+        Serial.printf("[NFC] addSPI=%d begin=%d\n", (int)wired, (int)begun);
+        g_begun = begun;
     }
     _ready = g_begun;
     return _ready;
@@ -101,7 +103,13 @@ void Nfc::readOnce() {
     g_units.update();
 
     PICC picc{};
-    if (g_nfc.detect(picc) && g_nfc.identify(picc)) {
+    bool det = g_nfc.detect(picc);
+    bool idn = det && g_nfc.identify(picc);
+    Serial.printf("[NFC] detect=%d identify=%d uid=%s type=%s\n",
+                  (int)det, (int)idn,
+                  idn ? picc.uidAsString().c_str() : "-",
+                  idn ? picc.typeAsString().c_str() : "-");
+    if (det && idn) {
         M5.Speaker.tone(3000, 20);
         _lastUid  = picc.uidAsString();
         _lastType = picc.typeAsString();
@@ -110,13 +118,6 @@ void Nfc::readOnce() {
         _lastSize = picc.size;
         _haveTag  = true;
         rememberForEmu(picc);
-        // Best-effort: capture the tag's user memory (Type2/NTAG) so EMULATE can
-        // present real content, not just the UID. Classic needs keys and will
-        // simply fail here, leaving g_emuMemLen = 0 (UID-only emulation).
-        {
-            uint16_t ml = sizeof(g_emuMem);
-            g_emuMemLen = g_nfc.read(g_emuMem, ml, (uint8_t)0) ? ml : 0;
-        }
         g_nfc.deactivate();
 
         auto& d = M5Cardputer.Display;
