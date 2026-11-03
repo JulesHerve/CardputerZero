@@ -1,0 +1,9 @@
+REM Opens Notepad on Windows and types a note. For YOUR OWN PC.
+DEFAULTDELAY 40
+DELAY 800
+GUI r
+DELAY 500
+STRINGLN notepad
+DELAY 1200
+STRINGLN Hello from CardputerZero!
+STRINGLN This macro ran on my own computer.

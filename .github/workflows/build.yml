@@ -1,0 +1,66 @@
+name: build
+
+# Builds the CardputerZero firmware on GitHub's servers and publishes the
+# flashable binaries as downloadable artifacts (Actions tab -> latest run ->
+# "CardputerZero-firmware"). No local toolchain needed.
+#
+# When you push a tag like v1.0, the binaries are also attached to a Release.
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+
+      - name: Install PlatformIO + esptool
+        run: pip install platformio esptool
+
+      - name: Build firmware
+        run: pio run -e cardputer-adv
+
+      - name: Merge single-file factory image (flash at 0x0)
+        run: |
+          D=.pio/build/cardputer-adv
+          esptool.py --chip esp32s3 merge_bin \
+            -o CardputerZero-factory.bin \
+            --flash_mode qio --flash_freq 80m --flash_size 8MB \
+            0x0     "$D/bootloader.bin" \
+            0x8000  "$D/partitions.bin" \
+            0x10000 "$D/firmware.bin"
+          ls -l CardputerZero-factory.bin "$D"/firmware.bin
+
+      - name: Upload binaries as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CardputerZero-firmware
+          path: |
+            CardputerZero-factory.bin
+            .pio/build/cardputer-adv/firmware.bin
+            .pio/build/cardputer-adv/bootloader.bin
+            .pio/build/cardputer-adv/partitions.bin
+
+      - name: Attach to Release (tag pushes only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            CardputerZero-factory.bin
+            .pio/build/cardputer-adv/firmware.bin

@@ -1,0 +1,6 @@
+REM Opens a terminal on most Linux desktops and prints a line.
+DEFAULTDELAY 40
+DELAY 800
+CTRL-ALT t
+DELAY 1200
+STRINGLN echo "Hello from CardputerZero on my own machine"

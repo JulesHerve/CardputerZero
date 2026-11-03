@@ -1,0 +1,6 @@
+REM Opens Windows System Information via the Run box.
+DEFAULTDELAY 40
+DELAY 800
+GUI r
+DELAY 500
+STRINGLN msinfo32

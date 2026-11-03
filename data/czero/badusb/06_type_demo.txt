@@ -1,0 +1,7 @@
+REM Pure typing demo - focus any text field first, then run.
+REM Shows STRING, ENTER, TAB and modifier combos.
+DEFAULTDELAY 60
+STRINGLN The quick brown fox jumps over the lazy dog.
+STRING Tab then select-all:
+TAB
+CTRL a

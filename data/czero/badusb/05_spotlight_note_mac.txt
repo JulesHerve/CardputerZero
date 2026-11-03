@@ -1,0 +1,8 @@
+REM macOS: open Spotlight, launch TextEdit, type a note.
+DEFAULTDELAY 50
+DELAY 800
+GUI SPACE
+DELAY 600
+STRINGLN TextEdit
+DELAY 1500
+STRINGLN Hello from CardputerZero on my own Mac.
