@@ -17,6 +17,30 @@ USBHIDKeyboard g_kbd;
 bool g_usbUp = false;
 uint32_t g_defaultDelay = 0;
 
+// Built-in example macros, compiled into the firmware so the USB tool always
+// has something to run even with no SD card. (SD scripts in /czero/badusb are
+// listed too.) All are benign and meant for YOUR OWN computer.
+struct Builtin { const char* name; const char* text; };
+const Builtin BUILTINS[] = {
+    { "Hello (Win)",
+      "DEFAULTDELAY 40\nDELAY 800\nGUI r\nDELAY 500\nSTRINGLN notepad\n"
+      "DELAY 1200\nSTRINGLN Hello from CardputerZero!\n"
+      "STRINGLN This ran on my own computer.\n" },
+    { "Lock PC (Win)",
+      "DELAY 400\nGUI l\n" },
+    { "System info (Win)",
+      "DEFAULTDELAY 40\nDELAY 800\nGUI r\nDELAY 500\nSTRINGLN msinfo32\n" },
+    { "Terminal (Linux)",
+      "DEFAULTDELAY 40\nDELAY 800\nCTRL-ALT t\nDELAY 1200\n"
+      "STRINGLN echo Hello from CardputerZero on my own machine\n" },
+    { "Spotlight note (Mac)",
+      "DEFAULTDELAY 50\nDELAY 800\nGUI SPACE\nDELAY 600\nSTRINGLN TextEdit\n"
+      "DELAY 1500\nSTRINGLN Hello from CardputerZero on my own Mac.\n" },
+    { "Type demo",
+      "DEFAULTDELAY 60\nSTRINGLN The quick brown fox jumps over the lazy dog.\n" },
+};
+constexpr int N_BUILTINS = sizeof(BUILTINS) / sizeof(BUILTINS[0]);
+
 void usbBegin() {
     if (g_usbUp) return;
     g_kbd.begin();
@@ -95,8 +119,23 @@ void BadUsb::onEnter() { _view = View::List; refresh(); draw(); }
 void BadUsb::onExit()  {}
 
 void BadUsb::refresh() {
-    _scripts = Storage::listDir(cfg::DIR_BADUSB);
+    _scripts.clear();
+    // Built-ins first (prefixed with a dot so they read as "system" entries),
+    // then any .txt files found on the SD card.
+    for (int i = 0; i < N_BUILTINS; ++i) _scripts.push_back(std::string(". ") + BUILTINS[i].name);
+    for (auto& f : Storage::listDir(cfg::DIR_BADUSB)) _scripts.push_back(f);
     _sel = _top = 0;
+}
+
+// Resolve a list entry to its script text (built-in or SD file).
+static bool scriptText(const std::string& entry, std::string& out) {
+    if (entry.rfind(". ", 0) == 0) {                 // built-in
+        std::string name = entry.substr(2);
+        for (int i = 0; i < N_BUILTINS; ++i)
+            if (name == BUILTINS[i].name) { out = BUILTINS[i].text; return true; }
+        return false;
+    }
+    return Storage::read(std::string(cfg::DIR_BADUSB) + "/" + entry, out);
 }
 
 void BadUsb::draw() {
@@ -124,7 +163,7 @@ void BadUsb::run(const std::string& name) {
     UI::banner("Starting USB HID...", UI::cWarn());
 
     std::string txt;
-    if (!Storage::read(std::string(cfg::DIR_BADUSB) + "/" + name, txt)) {
+    if (!scriptText(name, txt)) {
         UI::banner("Read failed", UI::cWarn()); delay(1000);
         _view = View::List; draw(); return;
     }

@@ -24,6 +24,37 @@ m5::unit::UnitUnified   g_units;
 m5::unit::CapCC1101NFC  g_unit{};
 m5::nfc::NFCLayerA      g_nfc{g_unit};
 bool                    g_begun = false;
+
+// --- tag emulation (mirrors M5's NFCA/Emulation example) ---
+class EmuA : public m5::nfc::EmulationLayerA {
+public:
+    using m5::nfc::EmulationLayerA::EmulationLayerA;   // inherit ctors
+};
+EmuA     g_emu{g_unit};
+bool     g_haveEmu = false;
+Type     g_emuType{};
+uint8_t  g_emuUid[10] = {0};
+uint8_t  g_emuUidLen = 0;
+uint8_t  g_emuMem[180] = {0};
+
+uint8_t bcc8(const uint8_t* p, uint8_t len, uint8_t init = 0) {
+    uint8_t v = init;
+    for (uint8_t i = 0; i < len; ++i) v ^= p[i];
+    return v;
+}
+void embedUid7(uint8_t mem[9], const uint8_t uid[7]) {
+    memcpy(mem, uid, 3);
+    mem[3] = bcc8(uid, 3, 0x88);     // CT
+    memcpy(mem + 4, uid + 3, 4);
+    mem[8] = bcc8(uid + 3, 4);
+}
+
+void rememberForEmu(const m5::nfc::a::PICC& picc) {
+    g_emuType = picc.type;
+    g_emuUidLen = picc.size <= 10 ? picc.size : 10;
+    memcpy(g_emuUid, picc.uid, g_emuUidLen);
+    g_haveEmu = true;
+}
 }  // namespace
 
 namespace apps {
@@ -48,6 +79,7 @@ void Nfc::onEnter() {
     if (!_menuBuilt) {
         _menu.add(core::Icon::Read, "READ",    "UID, type, ATQA / SAK");
         _menu.add(core::Icon::Dump, "CONTENT", "Decode NDEF text / URL / image");
+        _menu.add(core::Icon::Tx,   "EMULATE", "Present the last-read tag over RF");
         _menu.add(core::Icon::Info, "SERIAL",  "Full memory dump over USB");
         _menu.add(core::Icon::Save, "SAVE",    "Log last tag to SD (CSV)");
         _menuBuilt = true;
@@ -76,6 +108,7 @@ void Nfc::readOnce() {
         _lastSak  = picc.sak;
         _lastSize = picc.size;
         _haveTag  = true;
+        rememberForEmu(picc);
         g_nfc.deactivate();
 
         auto& d = M5Cardputer.Display;
@@ -113,6 +146,7 @@ void Nfc::readContent() {
     M5.Speaker.tone(3000, 20);
     _lastUid = picc.uidAsString(); _lastType = picc.typeAsString();
     _lastAtqa = picc.atqa; _lastSak = picc.sak; _lastSize = picc.size; _haveTag = true;
+    rememberForEmu(picc);
 
     if (!picc.supportsNDEF()) {
         g_nfc.deactivate();
@@ -192,6 +226,58 @@ void Nfc::saveIdentity() {
     drawMenu();
 }
 
+void Nfc::emulate() {
+    if (!g_haveEmu) { UI::banner("Read a tag first", UI::cWarn()); delay(900); drawMenu(); return; }
+    if (!ensureReader()) { UI::banner("Reader init failed", UI::cWarn()); delay(1200); drawMenu(); return; }
+    SpiBus::claim(SpiBus::Owner::Nfc);
+
+    // Build the PICC to present and a small backing memory with the UID embedded.
+    PICC epicc{};
+    epicc.emulate(g_emuType, g_emuUid, g_emuUidLen);
+    memset(g_emuMem, 0, sizeof(g_emuMem));
+    if (g_emuUidLen == 7) embedUid7(g_emuMem, g_emuUid);
+    else                  memcpy(g_emuMem, g_emuUid, g_emuUidLen);
+
+    bool ok = g_emu.begin(epicc, g_emuMem, sizeof(g_emuMem));
+    UI::clear();
+    UI::header("NFC Emulate", _lastType.c_str());
+    if (!ok) { UI::banner("Emulation unsupported\nfor this tag", UI::cWarn()); delay(1200); g_emu.end(); drawMenu(); return; }
+
+    auto& d = M5Cardputer.Display;
+    UI::banner(("Emulating\n" + _lastUid).c_str(), UI::cAccent());
+    UI::footer("present to a reader   [`] stop");
+
+    EmuA::State last = EmuA::State::None;
+    uint32_t start = millis();
+    while (true) {
+        g_units.update();
+        g_emu.update();                    // must be pumped continuously
+        EmuA::State st = g_emu.state();
+        if (st != last) {                  // show live state in the footer
+            last = st;
+            const char* n = "idle";
+            switch (st) {
+                case EmuA::State::Active: n = "ACTIVE (being read)"; break;
+                case EmuA::State::Ready:  n = "ready"; break;
+                case EmuA::State::Halt:   n = "halt"; break;
+                case EmuA::State::Idle:   n = "waiting for reader"; break;
+                default:                  n = "waiting for reader"; break;
+            }
+            d.fillRect(0, UI::H - 14, UI::W, 14, UI::cBar());
+            d.setFont(&fonts::Font0); d.setTextDatum(middle_left);
+            d.setTextColor(UI::cDim(), UI::cBar());
+            d.drawString(n, 8, UI::H - 7);
+        }
+        auto ev = Input::poll();
+        if (ev.key == Key::Back) break;
+        if (millis() - start > 120000) break;   // safety timeout
+        delay(2);
+    }
+    g_emu.end();
+    g_nfc.deactivate();
+    drawMenu();
+}
+
 void Nfc::dumpSerial() {
     if (!ensureReader()) { UI::banner("Reader init failed", UI::cWarn()); delay(1200); drawMenu(); return; }
     SpiBus::claim(SpiBus::Owner::Nfc);
@@ -224,8 +310,9 @@ core::Signal Nfc::onTick(const core::KeyEvent& ev) {
             switch (_menu.selection()) {
             case 0: readOnce(); break;
             case 1: readContent(); break;
-            case 2: dumpSerial(); break;
-            case 3: saveIdentity(); break;
+            case 2: emulate(); break;
+            case 3: dumpSerial(); break;
+            case 4: saveIdentity(); break;
             }
         }
         break;

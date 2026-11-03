@@ -46,6 +46,9 @@ both supported. The tool opens as an icon sub-menu:
   not just the UID: **text** records, **links/URLs**, and small **images**
   (`image/png` records are drawn on screen). Write an NDEF text/URL/image to your
   NTAG from a phone app, then read it here.
+- **EMULATE** — after a READ/CONTENT, presents that tag's UID + type over RF so a
+  reader sees the Cardputer as the tag. The footer shows live state (waiting /
+  ACTIVE when a reader is polling it). Press **`` ` ``** to stop.
 - **SERIAL** — full memory dump over **USB serial** (open the serial monitor).
   MIFARE Classic uses the default key `FF FF FF FF FF FF`; NTAG ignores keys.
 
@@ -64,10 +67,16 @@ For your own TVs, projectors, air-con, etc. Icon sub-menu:
 > (emitter G2, receiver G1). To emit through the Cardputer's built-in LED
 > instead, set `PIN_IR_TX` back to `PIN_IR_TX_BUILTIN` in `src/config.h`.
 
-## Wi-Fi scan
+## Wi-Fi
 
-Lists nearby access points (SSID, signal, channel, security). **Passive only**
-— it never connects or interferes. **Enter** rescans.
+Icon sub-menu, all **passive** (listen-only, never connects or interferes):
+
+- **SCAN** — APs in range sorted strongest-first; **Enter** opens an AP's detail,
+  **`r`** rescans.
+- **CHANNELS** — bar graph of how many APs sit on each 2.4 GHz channel (1-14), so
+  you can see the busiest/clearest channels at a glance.
+- **DETAIL** — full info for one AP: SSID, BSSID, channel, signal, security;
+  **`;`/`.`** steps through the other APs.
 
 ## BLE
 
@@ -105,4 +114,6 @@ CTRL-ALT t         REM a terminal on many Linux desktops
 ENTER / TAB / ESC / SPACE / UP / DOWN / LEFT / RIGHT
 ```
 
-See `data/czero/badusb/hello.txt` for a working example.
+The tool ships with built-in example scripts (shown with a leading `.`) so it
+works even with no SD card; any `.txt` files in `/czero/badusb` on the SD card
+are listed too. See `data/czero/badusb/` for editable examples.

@@ -76,6 +76,33 @@ void selectBand(uint32_t hz) {
     g_radio.setDIOMapping(2, sw1 ? cfg::CC1101_GDO2_FORCE_HI : cfg::CC1101_GDO2_FORCE_LO);
 }
 
+// Replicates RadioLib's CC1101::beginCommon() but SKIPS the chip-version check
+// (the Cap's clone reports an unlisted version). Requires -DRADIOLIB_GODMODE=1
+// so the normally-protected internals are reachable.
+int16_t cc1101BeginNoVersionCheck(const ConfigFSK_t& cfg_) {
+    Module* m = g_radio.getMod();
+    m->spiConfig.cmds[RADIOLIB_MODULE_SPI_COMMAND_READ]  = RADIOLIB_CC1101_CMD_READ;
+    m->spiConfig.cmds[RADIOLIB_MODULE_SPI_COMMAND_WRITE] = RADIOLIB_CC1101_CMD_WRITE;
+    int16_t st = m->init();
+    if (st != RADIOLIB_ERR_NONE) return st;
+    m->hal->pinMode(m->getIrq(), m->hal->GpioModeInput);
+
+    // --- no version gate here ---
+    st = g_radio.config();                                      if (st != RADIOLIB_ERR_NONE) return st;
+    st = g_radio.setFrequency(cfg_.frequency);                  if (st != RADIOLIB_ERR_NONE) return st;
+    st = g_radio.setBitRate(cfg_.bitRate);                      if (st != RADIOLIB_ERR_NONE) return st;
+    st = g_radio.setRxBandwidth(cfg_.receiverBandwidth);        if (st != RADIOLIB_ERR_NONE) return st;
+    st = g_radio.setFrequencyDeviation(cfg_.frequencyDeviation);if (st != RADIOLIB_ERR_NONE) return st;
+    st = g_radio.setOutputPower(cfg_.power);                    if (st != RADIOLIB_ERR_NONE) return st;
+    g_radio.variablePacketLengthMode();
+    g_radio.setPreambleLength(cfg_.preambleLength, cfg_.preambleLength - 4);
+    g_radio.setDataShaping(RADIOLIB_SHAPING_NONE);
+    g_radio.setEncoding(RADIOLIB_ENCODING_NRZ);
+    g_radio.SPIsendCommand(RADIOLIB_CC1101_CMD_FLUSH_RX);
+    g_radio.SPIsendCommand(RADIOLIB_CC1101_CMD_FLUSH_TX);
+    return RADIOLIB_ERR_NONE;
+}
+
 }  // namespace
 
 namespace apps {
@@ -100,7 +127,10 @@ bool SubGhz::ensureRadio() {
     rc.power              = 10;          // dBm
     rc.preambleLength     = 16;          // bits
 
-    int st = g_radio.begin(rc);
+    // The Cap's CC1101 clone can report a version RadioLib's begin() rejects, so
+    // we run begin()'s exact register setup ourselves WITHOUT the version gate
+    // (GODMODE exposes the internals). Mirrors CC1101::beginCommon().
+    int st = cc1101BeginNoVersionCheck(rc);
     if (st == RADIOLIB_ERR_NONE) {
         g_radio.setOOK(true);
         g_radio.setEncoding(RADIOLIB_ENCODING_NRZ);   // no manchester/whitening

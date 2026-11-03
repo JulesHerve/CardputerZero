@@ -38,6 +38,7 @@ private:
     void readContent();          // NDEF text / URL / image
     void dumpSerial();
     void saveIdentity();
+    void emulate();              // present the last-read tag's UID/type over RF
 
     std::string _lastUid, _lastType;
     unsigned    _lastAtqa = 0, _lastSak = 0, _lastSize = 0;

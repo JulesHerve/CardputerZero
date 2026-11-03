@@ -72,10 +72,19 @@ void Ble::onEnter() {
 
 void Ble::onExit() { stopRadio(); }
 
+void Ble::ensureBle() {
+    if (!_radioUp) {
+        BLEDevice::init("CardputerZero");   // HID advertises under this name
+        _radioUp = true;
+    }
+}
+
 void Ble::stopRadio() {
     if (_radioUp) {
-        BLEDevice::deinit(true);
-        _radioUp = false;
+        // deinit(false): keep the BT controller memory so a later init() works.
+        // deinit(true) frees it permanently and the next init() crash-resets.
+        BLEDevice::deinit(false);
+        _radioUp = false; _hidBuilt = false;
         g_server = nullptr; g_hid = nullptr; g_input = nullptr; g_connected = false;
     }
 }
@@ -83,7 +92,7 @@ void Ble::stopRadio() {
 // ---------------- SCAN ----------------
 void Ble::doScan() {
     UI::clear(); UI::header("BLE scan"); UI::banner("Scanning 5s...", UI::cAccent());
-    if (!_radioUp) { BLEDevice::init(""); _radioUp = true; }
+    ensureBle();
 
     BLEScan* s = BLEDevice::getScan();
     s->setActiveScan(true);
@@ -117,34 +126,40 @@ void Ble::drawScan() {
 
 // ---------------- KEYBOARD ----------------
 void Ble::kbStart() {
-    if (!_radioUp) { BLEDevice::init("CardputerZero"); _radioUp = true; }
-    g_connected = false;
-    g_server = BLEDevice::createServer();
-    g_server->setCallbacks(&g_srvCb);
+    ensureBle();
+    if (!_hidBuilt) {
+        // Build the HID server/service exactly once; re-entering just advertises.
+        g_server = BLEDevice::createServer();
+        g_server->setCallbacks(&g_srvCb);
 
-    g_hid = new BLEHIDDevice(g_server);
-    g_input = g_hid->inputReport(1);
-    g_hid->manufacturer(std::string("CardputerZero"));
-    g_hid->pnp(0x02, 0xE502, 0xA111, 0x0210);
-    g_hid->hidInfo(0x00, 0x01);
+        g_hid = new BLEHIDDevice(g_server);
+        g_input = g_hid->inputReport(1);
+        g_hid->manufacturer(std::string("CardputerZero"));
+        g_hid->pnp(0x02, 0xE502, 0xA111, 0x0210);
+        g_hid->hidInfo(0x00, 0x01);
 
-    BLESecurity* sec = new BLESecurity();
-    sec->setAuthenticationMode(ESP_LE_AUTH_BOND);
+        static BLESecurity sec;                 // static: no per-entry leak
+        sec.setAuthenticationMode(ESP_LE_AUTH_BOND);
 
-    g_hid->reportMap((uint8_t*)REPORT_MAP, sizeof(REPORT_MAP));
-    g_hid->startServices();
-    g_hid->setBatteryLevel(100);
+        g_hid->reportMap((uint8_t*)REPORT_MAP, sizeof(REPORT_MAP));
+        g_hid->startServices();
+        g_hid->setBatteryLevel(100);
 
-    BLEAdvertising* adv = g_server->getAdvertising();
-    adv->setAppearance(HID_KEYBOARD);
-    adv->addServiceUUID(g_hid->hidService()->getUUID());
-    adv->setScanResponse(true);
-    adv->start();
-
+        BLEAdvertising* adv = g_server->getAdvertising();
+        adv->setAppearance(HID_KEYBOARD);
+        adv->addServiceUUID(g_hid->hidService()->getUUID());
+        adv->setScanResponse(true);
+        _hidBuilt = true;
+    }
+    g_server->getAdvertising()->start();
     kbDraw();
 }
 
-void Ble::kbStop() { stopRadio(); }
+void Ble::kbStop() {
+    // Leave the stack up (deinit only happens when the app exits); just stop
+    // advertising so we are not discoverable while back in the menu.
+    if (g_server) g_server->getAdvertising()->stop();
+}
 
 void Ble::kbDraw() {
     UI::clear();
@@ -193,7 +208,7 @@ core::Signal Ble::onTick(const core::KeyEvent& ev) {
         break;
 
     case View::Scan:
-        if (ev.key == Key::Back) { stopRadio(); _view = View::Menu; _menu.draw("BLE"); break; }
+        if (ev.key == Key::Back) { _view = View::Menu; _menu.draw("BLE"); break; }
         if (ev.key == Key::Ok)   doScan();
         if (!_rows.empty()) {
             if (ev.key == Key::Up)   { UI::move(-1, _rows.size(), _sel, _top); drawScan(); }

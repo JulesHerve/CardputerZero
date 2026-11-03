@@ -40,8 +40,10 @@ private:
     void kbDraw();
     void kbKey(const core::KeyEvent& ev);
 
-    void stopRadio();            // deinit BLE whatever sub-view used it
-    bool _radioUp = false;
+    void ensureBle();            // BLEDevice::init once, with the HID name
+    void stopRadio();            // deinit BLE when leaving the whole app
+    bool _radioUp   = false;
+    bool _hidBuilt  = false;     // HID server/service created once
 };
 
 }  // namespace apps
