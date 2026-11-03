@@ -5,16 +5,19 @@
 #  manifest. PlatformIO compiles each library in isolation, so those headers are
 #  not on M5HAL's include path and the build fails with "Wire.h: No such file".
 #
+#  The ESP32-BLE-Keyboard library has the same trouble with <BLEDevice.h>, so
+#  the bundled BLE library's headers are added here too.
+#
 #  This runs before the build, resolves the Arduino-ESP32 framework directory,
-#  and appends the Wire/SPI source folders to the GLOBAL include path (CPPPATH),
-#  which every library build inherits. No hard-coded user paths.
+#  and appends those source folders to the GLOBAL include path (CPPPATH), which
+#  every library build inherits. No hard-coded user paths.
 import os
 Import("env")
 
 framework_dir = env.PioPlatform().get_package_dir("framework-arduinoespressif32")
 
 include_dirs = []
-for lib in ("Wire", "SPI"):
+for lib in ("Wire", "SPI", "BLE"):
     path = os.path.join(framework_dir, "libraries", lib, "src")
     if os.path.isdir(path):
         include_dirs.append(path)

@@ -5,57 +5,17 @@
 #include "../core/input.h"
 
 #include <BLEDevice.h>
-#include <BLEServer.h>
 #include <BLEScan.h>
 #include <BLEAdvertisedDevice.h>
-#include <BLEHIDDevice.h>
-#include <BLESecurity.h>
-#include <BLEUtils.h>
-#include <HIDTypes.h>
-#define US_KEYBOARD 1          // use the US ASCII->HID keymap table
-#include <HIDKeyboardTypes.h>
+#include <BleKeyboard.h>
 
 using namespace core;
 
 namespace {
-
-// ---- BLE HID keyboard state ----
-BLEServer*         g_server = nullptr;
-BLEHIDDevice*      g_hid    = nullptr;
-BLECharacteristic* g_input  = nullptr;
-volatile bool      g_connected = false;
-
-class SrvCb : public BLEServerCallbacks {
-    void onConnect(BLEServer*) override { g_connected = true; }
-    void onDisconnect(BLEServer* s) override {
-        g_connected = false;
-        s->getAdvertising()->start();   // allow re-pairing
-    }
-};
-SrvCb g_srvCb;
-
-// Standard boot-keyboard HID report map, report ID 1, 8-byte input reports
-// (byte0 = modifier bitmap, byte1 = reserved, bytes2..7 = up to six key usages).
-const uint8_t REPORT_MAP[] = {
-    0x05, 0x01, 0x09, 0x06, 0xA1, 0x01, 0x85, 0x01,
-    0x05, 0x07, 0x19, 0xE0, 0x29, 0xE7, 0x15, 0x00,
-    0x25, 0x01, 0x75, 0x01, 0x95, 0x08, 0x81, 0x02,
-    0x95, 0x01, 0x75, 0x08, 0x81, 0x03,
-    0x95, 0x06, 0x75, 0x08, 0x15, 0x00, 0x25, 0x65,
-    0x05, 0x07, 0x19, 0x00, 0x29, 0x65, 0x81, 0x00,
-    0xC0
-};
-
-void sendKey(uint8_t modifier, uint8_t usage) {
-    if (!g_input || !g_connected) return;
-    uint8_t rep[8] = { modifier, 0, usage, 0, 0, 0, 0, 0 };
-    g_input->setValue(rep, 8); g_input->notify();
-    delay(8);
-    uint8_t rel[8] = { 0 };
-    g_input->setValue(rel, 8); g_input->notify();
-    delay(8);
-}
-
+// The HID keyboard. Constructed once; begin()/teardown control its lifetime.
+BleKeyboard g_kb("CardputerZero", "CardputerZero", 100);
+bool g_bleUp = false;     // a BLE role currently holds the controller
+bool g_kbUp  = false;     // the keyboard role specifically is active
 }  // namespace
 
 namespace apps {
@@ -70,29 +30,24 @@ void Ble::onEnter() {
     _menu.draw("BLE");
 }
 
-void Ble::onExit() { stopRadio(); }
+void Ble::onExit() { stopAllBle(); }
 
-void Ble::ensureBle() {
-    if (!_radioUp) {
-        BLEDevice::init("CardputerZero");   // HID advertises under this name
-        _radioUp = true;
-    }
-}
-
-void Ble::stopRadio() {
-    if (_radioUp) {
-        // deinit(false): keep the BT controller memory so a later init() works.
-        // deinit(true) frees it permanently and the next init() crash-resets.
+void Ble::stopAllBle() {
+    if (g_kbUp) { g_kb.end(); g_kbUp = false; }
+    if (g_bleUp) {
+        // deinit(false): keep the controller memory so a later init() works.
         BLEDevice::deinit(false);
-        _radioUp = false; _hidBuilt = false;
-        g_server = nullptr; g_hid = nullptr; g_input = nullptr; g_connected = false;
+        g_bleUp = false;
     }
+    delay(40);
 }
 
 // ---------------- SCAN ----------------
 void Ble::doScan() {
+    stopAllBle();                       // ensure the keyboard role is gone
     UI::clear(); UI::header("BLE scan"); UI::banner("Scanning 5s...", UI::cAccent());
-    ensureBle();
+    BLEDevice::init("");
+    g_bleUp = true;
 
     BLEScan* s = BLEDevice::getScan();
     s->setActiveScan(true);
@@ -126,69 +81,30 @@ void Ble::drawScan() {
 
 // ---------------- KEYBOARD ----------------
 void Ble::kbStart() {
-    ensureBle();
-    if (!_hidBuilt) {
-        // Build the HID server/service exactly once; re-entering just advertises.
-        g_server = BLEDevice::createServer();
-        g_server->setCallbacks(&g_srvCb);
-
-        g_hid = new BLEHIDDevice(g_server);
-        g_input = g_hid->inputReport(1);
-        g_hid->manufacturer(std::string("CardputerZero"));
-        g_hid->pnp(0x02, 0xE502, 0xA111, 0x0210);
-        g_hid->hidInfo(0x00, 0x01);
-
-        static BLESecurity sec;                 // static: no per-entry leak
-        sec.setAuthenticationMode(ESP_LE_AUTH_BOND);
-
-        g_hid->reportMap((uint8_t*)REPORT_MAP, sizeof(REPORT_MAP));
-        g_hid->startServices();
-        g_hid->setBatteryLevel(100);
-
-        BLEAdvertising* adv = g_server->getAdvertising();
-        adv->setAppearance(HID_KEYBOARD);
-        adv->addServiceUUID(g_hid->hidService()->getUUID());
-        adv->setScanResponse(true);
-        _hidBuilt = true;
-    }
-    g_server->getAdvertising()->start();
-    kbDraw();
+    stopAllBle();                       // free the controller before claiming it
+    g_kb.begin();                       // the library inits BLE + HID + advertising
+    g_bleUp = true; g_kbUp = true;
+    kbDraw(false);
 }
 
-void Ble::kbStop() {
-    // Leave the stack up (deinit only happens when the app exits); just stop
-    // advertising so we are not discoverable while back in the menu.
-    if (g_server) g_server->getAdvertising()->stop();
-}
-
-void Ble::kbDraw() {
+void Ble::kbDraw(bool linked) {
     UI::clear();
-    UI::header("BLE keyboard", g_connected ? "linked" : "pairing");
-    if (g_connected) {
-        UI::banner("Connected.\nType - keys go to your device.", UI::cAccent());
-    } else {
-        UI::banner("Pair \"CardputerZero\"\nfrom your device's BT menu", UI::cDim());
-    }
+    UI::header("BLE keyboard", linked ? "linked" : "pairing");
+    if (linked) UI::banner("Connected.\nType - keys go to your device.", UI::cAccent());
+    else        UI::banner("Pair \"CardputerZero\"\nfrom your device's BT menu", UI::cDim());
     UI::footer("[`] back   type to send");
 }
 
 void Ble::kbKey(const core::KeyEvent& ev) {
-    if (!g_connected) return;
+    if (!g_kbUp || !g_kb.isConnected()) return;
     switch (ev.key) {
-        case Key::Ok:    sendKey(0, 0x28); return;     // Enter
-        case Key::Up:    sendKey(0, 0x52); return;
-        case Key::Down:  sendKey(0, 0x51); return;
-        case Key::Left:  sendKey(0, 0x50); return;
-        case Key::Right: sendKey(0, 0x4F); return;
-        case Key::Char: {
-            uint8_t ch = (uint8_t)ev.ch;
-            if (ch < KEYMAP_SIZE) {
-                KEYMAP km = keymap[ch];                // ASCII -> {usage, modifier}
-                if (km.usage) sendKey(km.modifier, km.usage);
-            }
-            return;
-        }
-        default: return;
+        case Key::Ok:    g_kb.write(KEY_RETURN); break;
+        case Key::Up:    g_kb.write(KEY_UP_ARROW); break;
+        case Key::Down:  g_kb.write(KEY_DOWN_ARROW); break;
+        case Key::Left:  g_kb.write(KEY_LEFT_ARROW); break;
+        case Key::Right: g_kb.write(KEY_RIGHT_ARROW); break;
+        case Key::Char:  g_kb.write((uint8_t)ev.ch); break;   // ASCII -> HID
+        default: break;
     }
 }
 
@@ -208,7 +124,7 @@ core::Signal Ble::onTick(const core::KeyEvent& ev) {
         break;
 
     case View::Scan:
-        if (ev.key == Key::Back) { _view = View::Menu; _menu.draw("BLE"); break; }
+        if (ev.key == Key::Back) { stopAllBle(); _view = View::Menu; _menu.draw("BLE"); break; }
         if (ev.key == Key::Ok)   doScan();
         if (!_rows.empty()) {
             if (ev.key == Key::Up)   { UI::move(-1, _rows.size(), _sel, _top); drawScan(); }
@@ -216,12 +132,14 @@ core::Signal Ble::onTick(const core::KeyEvent& ev) {
         }
         break;
 
-    case View::Keyboard:
-        if (ev.key == Key::Back) { kbStop(); _view = View::Menu; _menu.draw("BLE"); break; }
-        // redraw link state on any key, then send it
-        kbKey(ev);
-        kbDraw();
+    case View::Keyboard: {
+        if (ev.key == Key::Back) { stopAllBle(); _view = View::Menu; _menu.draw("BLE"); break; }
+        static bool lastLinked = false;
+        bool linked = g_kbUp && g_kb.isConnected();
+        if (ev.key != Key::None) kbKey(ev);     // send the keystroke
+        if (linked != lastLinked) { lastLinked = linked; kbDraw(linked); }
         break;
+    }
     }
     return Signal::Stay;
 }

@@ -2,9 +2,12 @@
 // ble.h  -  Bluetooth LE tool with an icon sub-menu
 //
 //   SCAN      : passive list of nearby BLE advertisers (listen only)
-//   KEYBOARD  : the Cardputer becomes a BLE HID keyboard - pair it from your
-//               own PC / phone / tablet and whatever you type here is sent to
-//               that device over Bluetooth (the wireless sibling of USB macro)
+//   KEYBOARD  : the Cardputer becomes a BLE HID keyboard (via the proven
+//               ESP32-BLE-Keyboard library) - pair it from your own device and
+//               type to it wirelessly.
+//
+// Scan and keyboard are run one-at-a-time with a full BLE teardown between
+// them, so the two Bluetooth roles never fight over the controller.
 // =============================================================================
 #pragma once
 #include "../core/app.h"
@@ -36,14 +39,10 @@ private:
 
     // keyboard
     void kbStart();
-    void kbStop();
-    void kbDraw();
+    void kbDraw(bool linked);
     void kbKey(const core::KeyEvent& ev);
 
-    void ensureBle();            // BLEDevice::init once, with the HID name
-    void stopRadio();            // deinit BLE when leaving the whole app
-    bool _radioUp   = false;
-    bool _hidBuilt  = false;     // HID server/service created once
+    void stopAllBle();           // tear down whatever BLE role was active
 };
 
 }  // namespace apps

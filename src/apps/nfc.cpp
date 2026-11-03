@@ -36,6 +36,7 @@ Type     g_emuType{};
 uint8_t  g_emuUid[10] = {0};
 uint8_t  g_emuUidLen = 0;
 uint8_t  g_emuMem[180] = {0};
+uint16_t g_emuMemLen = 0;        // bytes of real tag memory captured (0 = UID only)
 
 uint8_t bcc8(const uint8_t* p, uint8_t len, uint8_t init = 0) {
     uint8_t v = init;
@@ -109,6 +110,13 @@ void Nfc::readOnce() {
         _lastSize = picc.size;
         _haveTag  = true;
         rememberForEmu(picc);
+        // Best-effort: capture the tag's user memory (Type2/NTAG) so EMULATE can
+        // present real content, not just the UID. Classic needs keys and will
+        // simply fail here, leaving g_emuMemLen = 0 (UID-only emulation).
+        {
+            uint16_t ml = sizeof(g_emuMem);
+            g_emuMemLen = g_nfc.read(g_emuMem, ml, 0) ? ml : 0;
+        }
         g_nfc.deactivate();
 
         auto& d = M5Cardputer.Display;
@@ -223,6 +231,7 @@ void Nfc::saveIdentity() {
     UI::banner(ok ? "Saved to /czero/nfc/tags.csv" : "Save failed",
                ok ? UI::cAccent() : UI::cWarn());
     delay(900);
+    _view = View::Menu;          // return control to the icon menu (fixes freeze)
     drawMenu();
 }
 
@@ -234,10 +243,13 @@ void Nfc::emulate() {
     // Build the PICC to present and a small backing memory with the UID embedded.
     PICC epicc{};
     epicc.emulate(g_emuType, g_emuUid, g_emuUidLen);
-    memset(g_emuMem, 0, sizeof(g_emuMem));
-    if (g_emuUidLen == 7) embedUid7(g_emuMem, g_emuUid);
-    else                  memcpy(g_emuMem, g_emuUid, g_emuUidLen);
-
+    // If we captured the real tag memory at read time, present that. Otherwise
+    // fall back to a UID-only image.
+    if (g_emuMemLen == 0) {
+        memset(g_emuMem, 0, sizeof(g_emuMem));
+        if (g_emuUidLen == 7) embedUid7(g_emuMem, g_emuUid);
+        else                  memcpy(g_emuMem, g_emuUid, g_emuUidLen);
+    }
     bool ok = g_emu.begin(epicc, g_emuMem, sizeof(g_emuMem));
     UI::clear();
     UI::header("NFC Emulate", _lastType.c_str());

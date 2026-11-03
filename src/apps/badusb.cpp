@@ -115,8 +115,35 @@ void runLine(const std::string& raw) {
 
 namespace apps {
 
-void BadUsb::onEnter() { _view = View::List; refresh(); draw(); }
+void BadUsb::onEnter() {
+    _view = View::Menu;
+    if (!_menuBuilt) {
+        _menu.add(core::Icon::Dump,     "BAD USB",  "Run a saved/built-in macro");
+        _menu.add(core::Icon::Keyboard, "KEYBOARD", "Type live into this computer");
+        _menuBuilt = true;
+    }
+    _menu.draw("USB");
+}
 void BadUsb::onExit()  {}
+
+void BadUsb::kbDraw() {
+    UI::clear();
+    UI::header("USB keyboard");
+    UI::banner("Typing goes to the PC\nthe Cardputer is plugged into", UI::cAccent());
+    UI::footer("type to send   [`] back");
+}
+
+void BadUsb::kbKey(const core::KeyEvent& ev) {
+    switch (ev.key) {
+        case Key::Ok:    g_kbd.write(KEY_RETURN); break;
+        case Key::Up:    g_kbd.write(KEY_UP_ARROW); break;
+        case Key::Down:  g_kbd.write(KEY_DOWN_ARROW); break;
+        case Key::Left:  g_kbd.write(KEY_LEFT_ARROW); break;
+        case Key::Right: g_kbd.write(KEY_RIGHT_ARROW); break;
+        case Key::Char:  g_kbd.write((uint8_t)ev.ch); break;
+        default: break;
+    }
+}
 
 void BadUsb::refresh() {
     _scripts.clear();
@@ -191,8 +218,19 @@ void BadUsb::run(const std::string& name) {
 
 core::Signal BadUsb::onTick(const core::KeyEvent& ev) {
     switch (_view) {
-    case View::List:
+    case View::Menu:
+        if (ev.key == Key::Left)  { _menu.move(-1, 0); _menu.draw("USB"); }
+        if (ev.key == Key::Right) { _menu.move(+1, 0); _menu.draw("USB"); }
+        if (ev.key == Key::Up)    { _menu.move(0, -1); _menu.draw("USB"); }
+        if (ev.key == Key::Down)  { _menu.move(0, +1); _menu.draw("USB"); }
         if (ev.key == Key::Back) return Signal::Back;
+        if (ev.key == Key::Ok) {
+            if (_menu.selection() == 0) { _view = View::List; refresh(); draw(); }
+            else { _view = View::Keyboard; usbBegin(); kbDraw(); }
+        }
+        break;
+    case View::List:
+        if (ev.key == Key::Back) { _view = View::Menu; _menu.draw("USB"); break; }
         if (!_scripts.empty()) {
             if (ev.key == Key::Up)   { UI::move(-1, _scripts.size(), _sel, _top); draw(); }
             if (ev.key == Key::Down) { UI::move(+1, _scripts.size(), _sel, _top); draw(); }
@@ -202,6 +240,10 @@ core::Signal BadUsb::onTick(const core::KeyEvent& ev) {
     case View::Confirm:
         if (ev.key == Key::Back) { _view = View::List; draw(); }
         if (ev.key == Key::Ok)   { run(_scripts[_sel]); }
+        break;
+    case View::Keyboard:
+        if (ev.key == Key::Back) { _view = View::Menu; _menu.draw("USB"); break; }
+        kbKey(ev);
         break;
     case View::Running:
         break;

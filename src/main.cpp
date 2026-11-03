@@ -85,7 +85,7 @@ void setup() {
     g_home.add(Icon::Ir,     "IR",      "Learn & replay IR remotes");
     g_home.add(Icon::Wifi,   "WI-FI",   "Scan Wi-Fi networks");
     g_home.add(Icon::Ble,    "BLE",     "Scan or be a BLE keyboard");
-    g_home.add(Icon::Usb,    "USB",     "Run USB keyboard macros");
+    g_home.add(Icon::Usb,    "USB",     "Bad-USB scripts or live keyboard");
 
     // Splash.
     UI::clear();

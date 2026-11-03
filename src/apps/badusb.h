@@ -18,6 +18,7 @@
 #pragma once
 #include "../core/app.h"
 #include "../core/ui.h"
+#include "../core/iconmenu.h"
 #include <vector>
 #include <string>
 
@@ -25,18 +26,25 @@ namespace apps {
 
 class BadUsb : public core::App {
 public:
-    const char* title() const override { return "USB macro"; }
+    const char* title() const override { return "USB"; }
     void   onEnter() override;
     core::Signal onTick(const core::KeyEvent& ev) override;
     void   onExit() override;
 private:
-    enum class View { List, Confirm, Running };
-    View _view = View::List;
+    enum class View { Menu, List, Confirm, Running, Keyboard };
+    View _view = View::Menu;
+    core::IconMenu _menu;
+    bool _menuBuilt = false;
+
     int  _sel = 0, _top = 0;
     std::vector<std::string> _scripts;
     void refresh();
-    void draw();
+    void draw();                 // List / Confirm views
     void run(const std::string& name);
+
+    // live USB keyboard (types into the plugged-in computer)
+    void kbDraw();
+    void kbKey(const core::KeyEvent& ev);
 };
 
 }  // namespace apps

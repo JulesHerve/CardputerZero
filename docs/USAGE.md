@@ -90,7 +90,16 @@ Icon sub-menu:
   sent to that device over Bluetooth (arrow keys and Enter included). It's the
   wireless sibling of the USB macro tool. Press **`` ` ``** to disconnect.
 
-## USB macro (HID)
+## USB
+
+Icon sub-menu:
+
+- **BAD USB** — run a saved/built-in macro (below).
+- **KEYBOARD** — live mode: the Cardputer becomes a USB keyboard for the PC it's
+  plugged into, and whatever you type on it is sent straight to that computer
+  (arrows and Enter included). Press **`` ` ``** to stop.
+
+### Bad-USB macros
 
 Runs a small keyboard script on **the computer the Cardputer is plugged into** —
 for automating your own machine.
