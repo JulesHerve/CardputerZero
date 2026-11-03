@@ -115,7 +115,7 @@ void Nfc::readOnce() {
         // simply fail here, leaving g_emuMemLen = 0 (UID-only emulation).
         {
             uint16_t ml = sizeof(g_emuMem);
-            g_emuMemLen = g_nfc.read(g_emuMem, ml, 0) ? ml : 0;
+            g_emuMemLen = g_nfc.read(g_emuMem, ml, (uint8_t)0) ? ml : 0;
         }
         g_nfc.deactivate();
 

@@ -7,13 +7,11 @@
 #include <BLEDevice.h>
 #include <BLEScan.h>
 #include <BLEAdvertisedDevice.h>
-#include <BleKeyboard.h>
+#include "blekbd_wrap.h"     // BleKeyboard behind a wrapper (avoids KEY_* macro clash)
 
 using namespace core;
 
 namespace {
-// The HID keyboard. Constructed once; begin()/teardown control its lifetime.
-BleKeyboard g_kb("CardputerZero", "CardputerZero", 100);
 bool g_bleUp = false;     // a BLE role currently holds the controller
 bool g_kbUp  = false;     // the keyboard role specifically is active
 }  // namespace
@@ -33,7 +31,7 @@ void Ble::onEnter() {
 void Ble::onExit() { stopAllBle(); }
 
 void Ble::stopAllBle() {
-    if (g_kbUp) { g_kb.end(); g_kbUp = false; }
+    if (g_kbUp) { blekbd::end(); g_kbUp = false; }
     if (g_bleUp) {
         // deinit(false): keep the controller memory so a later init() works.
         BLEDevice::deinit(false);
@@ -82,7 +80,7 @@ void Ble::drawScan() {
 // ---------------- KEYBOARD ----------------
 void Ble::kbStart() {
     stopAllBle();                       // free the controller before claiming it
-    g_kb.begin();                       // the library inits BLE + HID + advertising
+    blekbd::begin();                    // the library inits BLE + HID + advertising
     g_bleUp = true; g_kbUp = true;
     kbDraw(false);
 }
@@ -96,14 +94,14 @@ void Ble::kbDraw(bool linked) {
 }
 
 void Ble::kbKey(const core::KeyEvent& ev) {
-    if (!g_kbUp || !g_kb.isConnected()) return;
+    if (!g_kbUp || !blekbd::isConnected()) return;
     switch (ev.key) {
-        case Key::Ok:    g_kb.write(KEY_RETURN); break;
-        case Key::Up:    g_kb.write(KEY_UP_ARROW); break;
-        case Key::Down:  g_kb.write(KEY_DOWN_ARROW); break;
-        case Key::Left:  g_kb.write(KEY_LEFT_ARROW); break;
-        case Key::Right: g_kb.write(KEY_RIGHT_ARROW); break;
-        case Key::Char:  g_kb.write((uint8_t)ev.ch); break;   // ASCII -> HID
+        case Key::Ok:    blekbd::writeSpecial(blekbd::Special::Enter); break;
+        case Key::Up:    blekbd::writeSpecial(blekbd::Special::Up);    break;
+        case Key::Down:  blekbd::writeSpecial(blekbd::Special::Down);  break;
+        case Key::Left:  blekbd::writeSpecial(blekbd::Special::Left);  break;
+        case Key::Right: blekbd::writeSpecial(blekbd::Special::Right); break;
+        case Key::Char:  blekbd::writeAscii((uint8_t)ev.ch);           break;
         default: break;
     }
 }
@@ -135,7 +133,7 @@ core::Signal Ble::onTick(const core::KeyEvent& ev) {
     case View::Keyboard: {
         if (ev.key == Key::Back) { stopAllBle(); _view = View::Menu; _menu.draw("BLE"); break; }
         static bool lastLinked = false;
-        bool linked = g_kbUp && g_kb.isConnected();
+        bool linked = g_kbUp && blekbd::isConnected();
         if (ev.key != Key::None) kbKey(ev);     // send the keystroke
         if (linked != lastLinked) { lastLinked = linked; kbDraw(linked); }
         break;
