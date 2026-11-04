@@ -26,7 +26,7 @@ public:
     void   onExit() override;
 
 private:
-    enum class View { Menu, Result };
+    enum class View { Menu, Result, Diag };
     View _view = View::Menu;
     core::IconMenu _menu;
     bool _menuBuilt = false;
@@ -36,9 +36,10 @@ private:
     void drawMenu();
     void readOnce();             // identity only
     void readContent();          // NDEF text / URL / image
-    void dumpSerial();
+    void dumpSerial();           // full memory dump over USB serial + SD summary
     void saveIdentity();
     void emulate();              // present the last-read tag's UID/type over RF
+    void drawDiag();             // on-screen diagnostics (no serial needed)
 
     std::string _lastUid, _lastType;
     unsigned    _lastAtqa = 0, _lastSak = 0, _lastSize = 0;

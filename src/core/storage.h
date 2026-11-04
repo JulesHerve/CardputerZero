@@ -27,6 +27,7 @@ public:
             ensureDir(cfg::DIR_NFC);
             ensureDir(cfg::DIR_IR);
             ensureDir(cfg::DIR_BADUSB);
+            ensureDir(cfg::DIR_WIFI);
         }
         return _ready;
     }

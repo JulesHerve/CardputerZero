@@ -130,7 +130,7 @@ void BadUsb::kbDraw() {
     UI::clear();
     UI::header("USB keyboard");
     UI::banner("Typing goes to the PC\nthe Cardputer is plugged into", UI::cAccent());
-    UI::footer("type to send   [`] back");
+    UI::footer("[`] esc only   [del]=backspace   type to send");
 }
 
 void BadUsb::kbKey(const core::KeyEvent& ev) {
@@ -140,6 +140,8 @@ void BadUsb::kbKey(const core::KeyEvent& ev) {
         case Key::Down:  g_kbd.write(KEY_DOWN_ARROW); break;
         case Key::Left:  g_kbd.write(KEY_LEFT_ARROW); break;
         case Key::Right: g_kbd.write(KEY_RIGHT_ARROW); break;
+        // Del forwards a real backspace to the host (NOT a screen exit).
+        case Key::Back:  if (ev.ch == '\b') g_kbd.write(KEY_BACKSPACE); break;
         case Key::Char:  g_kbd.write((uint8_t)ev.ch); break;
         default: break;
     }
@@ -242,7 +244,8 @@ core::Signal BadUsb::onTick(const core::KeyEvent& ev) {
         if (ev.key == Key::Ok)   { run(_scripts[_sel]); }
         break;
     case View::Keyboard:
-        if (ev.key == Key::Back) { _view = View::Menu; _menu.draw("USB"); break; }
+        // Only ESC (`) leaves this screen; Del is a backspace sent to the host.
+        if (isEscape(ev)) { _view = View::Menu; _menu.draw("USB"); break; }
         kbKey(ev);
         break;
     case View::Running:

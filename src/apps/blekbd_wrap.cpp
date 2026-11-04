@@ -30,6 +30,7 @@ void writeSpecial(Special s) {
         case Special::Down:  g_kb.write(KEY_DOWN_ARROW);  break;
         case Special::Left:  g_kb.write(KEY_LEFT_ARROW);  break;
         case Special::Right: g_kb.write(KEY_RIGHT_ARROW); break;
+        case Special::Backspace: g_kb.write(KEY_BACKSPACE); break;
     }
     g_sent++;
 }

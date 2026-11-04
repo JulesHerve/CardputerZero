@@ -15,8 +15,15 @@ enum class Key { None, Up, Down, Left, Right, Ok, Back, Char };
 
 struct KeyEvent {
     Key  key = Key::None;
-    char ch  = 0;      // valid when key == Key::Char
+    char ch  = 0;      // valid when key == Key::Char; also '\b' on a Back from Del
 };
+
+// Both the backtick (`, used as esc/back) and Del produce Key::Back so that menus
+// keep going "back" on either key as they always have. The keyboard screens need
+// to tell them apart (esc exits, Del sends a backspace to the host), so a Back
+// that came from Del carries ch == '\b'. Use this to detect it.
+inline bool isBackspace(const KeyEvent& ev) { return ev.key == Key::Back && ev.ch == '\b'; }
+inline bool isEscape(const KeyEvent& ev)    { return ev.key == Key::Back && ev.ch != '\b'; }
 
 class Input {
 public:
@@ -35,7 +42,9 @@ public:
         // navigation from the character keys:
         //   ; = up   . = down   , = left   / = right   ` = back   (Del also = back)
         if (st.enter) { ev.key = Key::Ok;   return ev; }
-        if (st.del)   { ev.key = Key::Back; return ev; }
+        // Del acts as "back" in menus (ch marks it so keyboard screens can instead
+        // forward a real backspace to the connected host).
+        if (st.del)   { ev.key = Key::Back; ev.ch = '\b'; return ev; }
 
         for (char c : st.word) {
             switch (c) {

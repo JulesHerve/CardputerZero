@@ -98,5 +98,6 @@ constexpr const char* DIR_SUBGHZ = "/czero/subghz";
 constexpr const char* DIR_NFC    = "/czero/nfc";
 constexpr const char* DIR_IR     = "/czero/ir";
 constexpr const char* DIR_BADUSB = "/czero/badusb";
+constexpr const char* DIR_WIFI   = "/czero/wifi";
 
 }  // namespace cfg

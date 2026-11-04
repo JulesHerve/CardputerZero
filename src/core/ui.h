@@ -1,11 +1,15 @@
 // =============================================================================
 // ui.h  -  Drawing helpers on top of M5GFX (M5Cardputer.Display)
 //
-// Visual language: "Nothing OS" inspired — pure-black canvas, monochrome white
-// glyphs, a single signature red accent, generous spacing, uppercase letter-
-// spaced labels. The home screen (in main.cpp) renders an iOS-style grid of
-// rounded app icons with a label under each; these helpers style the in-app
-// screens (title bar, lists, banners, console) to match.
+// Three selectable visual styles share these helpers (see core/theme.h):
+//   * Nothing OS (default) - pure-black canvas, mono white glyphs, one red accent
+//   * Dell 1996            - white page, black banners, sage rows, blue hints
+//   * Nintendo 2001        - periwinkle ground, carbon bars, orange selection
+//
+// Colours come from the live theme (g_theme) through the cXxx() accessors, so
+// apps never touch raw colours. A few structural choices (selection shape, hint
+// styling) branch on the active Theme::id here - the *style* owns those pixels,
+// not the individual page. The Nothing look is byte-for-byte what it always was.
 //
 // Screen is 240x135, landscape.
 // =============================================================================
@@ -13,6 +17,8 @@
 #include <M5Cardputer.h>
 #include <vector>
 #include <string>
+#include <cctype>
+#include "theme.h"
 
 namespace core {
 
@@ -21,19 +27,24 @@ public:
     static constexpr int W = 240;
     static constexpr int H = 135;
 
-    // --- Nothing-OS palette (RGB565) ---
-    static uint16_t cAccent() { return M5Cardputer.Display.color565(0xD7, 0x17, 0x1E); } // Nothing red
-    static uint16_t cBg()     { return M5Cardputer.Display.color565(0x00, 0x00, 0x00); } // true black
-    static uint16_t cTile()   { return M5Cardputer.Display.color565(0x16, 0x16, 0x18); } // icon chip
-    static uint16_t cBar()    { return M5Cardputer.Display.color565(0x0B, 0x0B, 0x0C); } // bars
-    static uint16_t cText()   { return M5Cardputer.Display.color565(0xF2, 0xF2, 0xF2); } // near-white
-    static uint16_t cDim()    { return M5Cardputer.Display.color565(0x6A, 0x6A, 0x70); } // grey
-    static uint16_t cLine()   { return M5Cardputer.Display.color565(0x2A, 0x2A, 0x2E); } // hairline
-    static uint16_t cWarn()   { return M5Cardputer.Display.color565(0xE6, 0xB4, 0x2C); } // amber
+    // --- colour roles (read the live theme) ---
+    static uint16_t cAccent()  { return rgb(g_theme.accent); }
+    static uint16_t cBg()      { return rgb(g_theme.bg); }
+    static uint16_t cTile()    { return rgb(g_theme.tile); }
+    static uint16_t cBar()     { return rgb(g_theme.bar); }
+    static uint16_t cBarText() { return rgb(g_theme.barText); }
+    static uint16_t cText()    { return rgb(g_theme.text); }
+    static uint16_t cDim()     { return rgb(g_theme.dim); }
+    static uint16_t cLine()    { return rgb(g_theme.line); }
+    static uint16_t cWarn()    { return rgb(g_theme.warn); }
+    static uint16_t cSelBg()   { return rgb(g_theme.selBg); }
+    static uint16_t cSelFg()   { return rgb(g_theme.selFg); }
+
+    static ThemeId  style()    { return g_theme.id; }
 
     static void clear() { M5Cardputer.Display.fillScreen(cBg()); }
 
-    // The signature little red dot.
+    // The signature little red dot (Nothing only).
     static void redDot(int x, int y) { M5Cardputer.Display.fillCircle(x, y, 2, cAccent()); }
 
     // Title bar with an optional right-aligned hint (band, battery, etc.).
@@ -41,17 +52,32 @@ public:
         auto& d = M5Cardputer.Display;
         d.fillRect(0, 0, W, 18, cBar());
         d.drawFastHLine(0, 18, W, cLine());
-        d.setTextDatum(middle_left);
-        d.setTextColor(cText(), cBar());
-        d.setFont(&fonts::Font2);
-        d.drawString(title, 8, 9);
-        if (right) {
-            d.setTextDatum(middle_right);
-            d.setTextColor(cDim(), cBar());
-            d.setFont(&fonts::Font0);
-            d.drawString(right, W - 14, 9);
+        if (style() == ThemeId::Nothing) {
+            d.setTextDatum(middle_left);
+            d.setTextColor(cText(), cBar());
+            d.setFont(&fonts::Font2);
+            d.drawString(title, 8, 9);
+            if (right) {
+                d.setTextDatum(middle_right);
+                d.setTextColor(cDim(), cBar());
+                d.setFont(&fonts::Font0);
+                d.drawString(right, W - 14, 9);
+            }
+            redDot(W - 7, 9);
+        } else {
+            // Dell & Nintendo: uppercase title on a dark bar; status in the
+            // accent (Dell red / Nintendo orange). No signature dot.
+            d.setTextDatum(middle_left);
+            d.setTextColor(cBarText(), cBar());
+            d.setFont(&fonts::Font2);
+            d.drawString(upper(title), 8, 9);
+            if (right) {
+                d.setTextDatum(middle_right);
+                d.setTextColor(cAccent(), cBar());
+                d.setFont(&fonts::Font0);
+                d.drawString(right, W - 8, 9);
+            }
         }
-        redDot(W - 7, 9);
     }
 
     static void footer(const char* hint) {
@@ -59,26 +85,57 @@ public:
         d.fillRect(0, H - 14, W, 14, cBar());
         d.drawFastHLine(0, H - 15, W, cLine());
         d.setTextDatum(middle_left);
-        d.setTextColor(cDim(), cBar());
         d.setFont(&fonts::Font0);
-        d.drawString(hint, 8, H - 7);
+        switch (style()) {
+            case ThemeId::Dell: {
+                // Blue underlined "link" hints on the black footer bar.
+                uint16_t linkBlue = M5Cardputer.Display.color565(0x6E, 0xA8, 0xFF);
+                d.setTextColor(linkBlue, cBar());
+                d.drawString(hint, 8, H - 7);
+                int w = d.textWidth(hint);
+                d.drawFastHLine(8, H - 2, w, linkBlue);
+                break;
+            }
+            case ThemeId::Nintendo:
+                d.setTextColor(cWarn(), cBar());        // amber chips
+                d.drawString(upper(hint), 8, H - 7);
+                break;
+            case ThemeId::Nothing:
+            default:
+                d.setTextColor(cDim(), cBar());
+                d.drawString(hint, 8, H - 7);
+                break;
+        }
     }
 
-    // Single-select scrolling list. Selected row = red chip with black text.
+    // Single-select scrolling list.
     static void list(const std::vector<std::string>& items, int sel, int top) {
         auto& d = M5Cardputer.Display;
         const int rowH = 16, y0 = 22, rows = 6;
         d.fillRect(0, 19, W, H - 19 - 14, cBg());
         d.setFont(&fonts::Font2);
         d.setTextDatum(middle_left);
+        const bool rounded = (style() == ThemeId::Nothing);
         for (int i = 0; i < rows; ++i) {
             int idx = top + i;
             if (idx >= (int)items.size()) break;
             int y = y0 + i * rowH;
             bool on = (idx == sel);
-            if (on) d.fillRoundRect(4, y - 1, W - 8, rowH, 4, cAccent());
-            d.setTextColor(on ? cBg() : cText(), on ? cAccent() : cBg());
-            d.drawString(items[idx].c_str(), 12, y + rowH / 2 - 1);
+            int textX = 12;
+            if (on) {
+                if (rounded) d.fillRoundRect(4, y - 1, W - 8, rowH, 4, cSelBg());
+                else         d.fillRect(4, y - 1, W - 8, rowH, cSelBg());
+            } else if (style() == ThemeId::Dell) {
+                // square bullet before each unselected catalogue row
+                d.fillRect(6, y + rowH / 2 - 3, 4, 4, cText());
+                textX = 14;
+            }
+            d.setTextColor(on ? cSelFg() : cText(), on ? cSelBg() : cBg());
+            d.drawString(items[idx].c_str(), textX, y + rowH / 2 - 1);
+            if (on && style() == ThemeId::Nintendo) {       // orange arrow badge
+                int ax = W - 14, ay = y + rowH / 2 - 1;
+                d.fillTriangle(ax, ay - 4, ax, ay + 4, ax + 6, ay, cAccent());
+            }
         }
     }
 
@@ -97,6 +154,21 @@ public:
         sel = (sel + delta + count) % count;
         if (sel < top) top = sel;
         if (sel >= top + rows) top = sel - rows + 1;
+    }
+
+private:
+    static uint16_t rgb(uint16_t packed565) { return packed565; }  // already RGB565
+
+    // Uppercase into a rotating set of static buffers (Dell/Nintendo titles/hints).
+    static const char* upper(const char* s) {
+        static char buf[4][64];
+        static int which = 0;
+        which = (which + 1) & 3;
+        char* o = buf[which];
+        int i = 0;
+        for (; s && s[i] && i < 63; ++i) o[i] = (char)toupper((unsigned char)s[i]);
+        o[i] = 0;
+        return o;
     }
 };
 

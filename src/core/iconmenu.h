@@ -1,10 +1,11 @@
 // =============================================================================
-// iconmenu.h  -  Reusable iOS-style icon grid (used by the home screen AND the
-//                in-app sub-menus, so every menu is icons, not a list).
+// iconmenu.h  -  Reusable icon grid (home screen AND in-app sub-menus)
 //
-// Up to 6 items in a 3-column grid; rows are centred horizontally. The selected
-// tile gets the Nothing-red ring and red label, and the footer shows that
-// item's one-line subtext.
+// Up to 6 items in a 3-column grid, rows centred horizontally. The selection
+// treatment follows the active theme:
+//   Nothing   - red ring + red caption
+//   Dell      - sage ribbon card, thick black outline + red caption + NEW! tag
+//   Nintendo  - light tile, orange ring + orange caption plate
 // =============================================================================
 #pragma once
 #include "ui.h"
@@ -55,16 +56,8 @@ public:
             int tileY = topY + row * CELLH;
             int tileX = cx - 19;
             bool on = (i == _sel);
-            d.fillRoundRect(tileX, tileY, 38, 38, 9, UI::cTile());
-            if (on) {
-                d.drawRoundRect(tileX, tileY, 38, 38, 9, UI::cAccent());
-                d.drawRoundRect(tileX + 1, tileY + 1, 36, 36, 8, UI::cAccent());
-            }
-            drawIcon(_items[i].icon, cx, tileY + 19, on ? UI::cText() : UI::cDim());
-            d.setFont(&fonts::Font0);
-            d.setTextDatum(middle_center);
-            d.setTextColor(on ? UI::cAccent() : UI::cDim(), UI::cBg());
-            d.drawString(_items[i].label, cx, tileY + 44);
+            (void)d;
+            drawTile(_items[i], cx, tileX, tileY, on);
         }
         UI::footer(n ? _items[_sel].subtext : "");
     }
@@ -75,6 +68,71 @@ private:
     static constexpr int CELLH = 48;
     std::vector<IconItem> _items;
     int _sel = 0;
+
+    static void drawTile(const IconItem& it, int cx, int tileX, int tileY, bool on) {
+        auto& d = M5Cardputer.Display;
+        switch (UI::style()) {
+
+        case ThemeId::Dell: {
+            d.fillRect(tileX, tileY, 38, 38, UI::cTile());          // sage ribbon body
+            if (on) {                                               // thick black outline
+                for (int k = 0; k < 3; ++k) d.drawRect(tileX - k, tileY - k, 38 + 2 * k, 38 + 2 * k, UI::cLine());
+            } else {
+                d.drawRect(tileX, tileY, 38, 38, UI::cLine());
+            }
+            drawIcon(it.icon, cx, tileY + 18, UI::cText());         // black glyph on sage
+            if (on) {                                               // yellow NEW! sticker
+                d.fillRect(tileX + 24, tileY - 5, 20, 10, UI::cWarn());
+                d.drawRect(tileX + 24, tileY - 5, 20, 10, UI::cLine());
+                d.setFont(&fonts::Font0); d.setTextDatum(middle_center);
+                d.setTextColor(UI::cLine(), UI::cWarn());
+                d.drawString("NEW", tileX + 34, tileY);
+            }
+            d.setFont(&fonts::Font0); d.setTextDatum(middle_center);
+            d.setTextColor(on ? UI::cAccent() : UI::cText(), UI::cBg());
+            d.drawString(it.label, cx, tileY + 44);
+            break;
+        }
+
+        case ThemeId::Nintendo: {
+            d.fillRoundRect(tileX, tileY, 38, 38, 8, UI::cTile());  // light metal tile
+            if (on) {
+                d.drawRoundRect(tileX, tileY, 38, 38, 8, UI::cAccent());
+                d.drawRoundRect(tileX + 1, tileY + 1, 36, 36, 7, UI::cAccent());
+            } else {
+                d.drawRoundRect(tileX, tileY, 38, 38, 8, UI::cLine());
+            }
+            drawIcon(it.icon, cx, tileY + 18, UI::cText());         // dark glyph on light tile
+            if (on) {                                               // orange caption plate
+                int pw = 46;
+                d.fillRect(cx - pw / 2, tileY + 40, pw, 11, UI::cAccent());
+                d.setFont(&fonts::Font0); d.setTextDatum(middle_center);
+                d.setTextColor(UI::cSelFg(), UI::cAccent());
+                d.drawString(it.label, cx, tileY + 45);
+            } else {
+                d.setFont(&fonts::Font0); d.setTextDatum(middle_center);
+                d.setTextColor(UI::cText(), UI::cBg());
+                d.drawString(it.label, cx, tileY + 45);
+            }
+            break;
+        }
+
+        case ThemeId::Nothing:
+        default: {                                                  // original look, unchanged
+            d.fillRoundRect(tileX, tileY, 38, 38, 9, UI::cTile());
+            if (on) {
+                d.drawRoundRect(tileX, tileY, 38, 38, 9, UI::cAccent());
+                d.drawRoundRect(tileX + 1, tileY + 1, 36, 36, 8, UI::cAccent());
+            }
+            drawIcon(it.icon, cx, tileY + 19, on ? UI::cText() : UI::cDim());
+            d.setFont(&fonts::Font0);
+            d.setTextDatum(middle_center);
+            d.setTextColor(on ? UI::cAccent() : UI::cDim(), UI::cBg());
+            d.drawString(it.label, cx, tileY + 44);
+            break;
+        }
+        }
+    }
 };
 
 }  // namespace core

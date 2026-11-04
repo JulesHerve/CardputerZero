@@ -15,6 +15,7 @@
 #include <M5Unified.h>
 
 #include "core/ui.h"
+#include "core/theme.h"
 #include "core/input.h"
 #include "core/app.h"
 #include "core/spi_bus.h"
@@ -53,6 +54,23 @@ const char* batteryHint() {
     return buf;
 }
 
+// --- theme persistence (/czero/theme.txt holds a single digit 0/1/2) ---------
+constexpr const char* THEME_FILE = "/czero/theme.txt";
+
+void loadTheme() {
+    std::string s;
+    if (Storage::isReady() && Storage::read(THEME_FILE, s) && !s.empty()) {
+        int v = s[0] - '0';
+        if (v >= 0 && v < THEME_COUNT) setTheme((ThemeId)v);
+    }
+}
+
+void saveTheme() {
+    if (!Storage::isReady()) return;
+    char v[2] = { (char)('0' + (int)currentTheme()), 0 };
+    Storage::write(THEME_FILE, v);
+}
+
 void drawHome() { g_home.draw("CardputerZero", batteryHint()); }
 
 void enterApp(int idx) {
@@ -79,19 +97,21 @@ void setup() {
 
     SpiBus::begin();
     Storage::begin();
+    loadTheme();                 // apply the saved skin (default = Nothing)
 
     g_home.add(Icon::SubGhz, "SUB-GHZ", "Capture & replay 315-915 MHz");
     g_home.add(Icon::Nfc,    "NFC",     "Read tags & NDEF content");
     g_home.add(Icon::Ir,     "IR",      "Learn & replay IR remotes");
-    g_home.add(Icon::Wifi,   "WI-FI",   "Scan Wi-Fi networks");
+    g_home.add(Icon::Wifi,   "WI-FI",   "Scan, guest portal, pun AP");
     g_home.add(Icon::Ble,    "BLE",     "Scan or be a BLE keyboard");
     g_home.add(Icon::Usb,    "USB",     "Bad-USB scripts or live keyboard");
 
     // Splash.
     UI::clear();
-    UI::header("CardputerZero");
+    UI::header("CardputerZero", themeName(currentTheme()));
     UI::banner("multi-tool", UI::cAccent());
-    UI::footer(Storage::isReady() ? "microSD detected" : "no microSD (screen-only)");
+    UI::footer(Storage::isReady() ? "[t] theme   microSD detected"
+                                  : "[t] theme   no microSD (screen-only)");
     delay(900);
 
     drawHome();
@@ -107,6 +127,19 @@ void loop() {
             case Key::Up:    g_home.move(0, -1); drawHome(); break;
             case Key::Down:  g_home.move(0, +1); drawHome(); break;
             case Key::Ok:    enterApp(g_home.selection()); break;
+            case Key::Char:
+                // 't' cycles the UI skin (Nothing -> Dell -> Nintendo) and saves it.
+                if (ev.ch == 't' || ev.ch == 'T') {
+                    ThemeId t = nextTheme();
+                    saveTheme();
+                    UI::clear();
+                    UI::header("Theme");
+                    UI::banner(themeName(t), UI::cAccent());
+                    UI::footer("[t] next theme   [`] back");
+                    delay(650);
+                    drawHome();
+                }
+                break;
             default: break;
         }
     } else {

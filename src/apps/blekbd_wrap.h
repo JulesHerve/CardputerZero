@@ -10,7 +10,7 @@
 #include <cstdint>
 
 namespace blekbd {
-enum class Special { Enter, Up, Down, Left, Right };
+enum class Special { Enter, Up, Down, Left, Right, Backspace };
 
 void begin();                 // init BLE + HID + start advertising
 void end();                   // stop (BLE teardown is done by the caller)

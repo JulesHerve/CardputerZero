@@ -18,6 +18,7 @@ enum class Icon {
     // actions
     Rx, Tx, Replay, Analyze, Freq, Load, Save,
     Learn, Power, Read, Dump, Scan, Keyboard, Info,
+    Portal, Ap,
 };
 
 inline void drawIcon(Icon g, int cx, int cy, uint16_t c) {
@@ -150,6 +151,26 @@ inline void drawIcon(Icon g, int cx, int cy, uint16_t c) {
         d.fillCircle(cx, cy - 6, 2, c);
         d.drawLine(cx, cy - 1, cx, cy + 7, c);
         break;
+    case Icon::Portal:                   // guest ID badge (sign-in)
+        d.drawRoundRect(cx - 12, cy - 15, 24, 30, 4, c);
+        d.drawFastHLine(cx - 12, cy - 8, 24, c);     // card header strip
+        d.fillCircle(cx, cy - 1, 4, c);              // head
+        d.drawLine(cx - 7, cy + 11, cx - 5, cy + 5, c);   // shoulders
+        d.drawLine(cx + 7, cy + 11, cx + 5, cy + 5, c);
+        d.drawFastHLine(cx - 7, cy + 11, 14, c);
+        break;
+    case Icon::Ap: {                     // broadcast tower (one network)
+        d.drawLine(cx, cy + 15, cx, cy - 3, c);      // mast
+        d.drawLine(cx - 6, cy + 15, cx, cy + 6, c);  // legs
+        d.drawLine(cx + 6, cy + 15, cx, cy + 6, c);
+        d.fillCircle(cx, cy - 5, 2, c);              // emitter
+        for (int k = 0; k < 2; ++k) {                // radio waves both sides
+            int r = 5 + k * 5;
+            d.drawLine(cx - r, cy - 5 - r, cx - r + 2, cy - 5 - r + 4, c);
+            d.drawLine(cx + r, cy - 5 - r, cx + r - 2, cy - 5 - r + 4, c);
+        }
+        break;
+    }
     }
 }
 

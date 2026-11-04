@@ -103,7 +103,7 @@ void Ble::kbDraw(bool linked) {
     char l[32]; snprintf(l, sizeof(l), "keys sent: %d", blekbd::sentCount());
     d.setFont(&fonts::Font0); d.setTextColor(UI::cText(), UI::cBg());
     d.drawString(l, 8, y);
-    UI::footer("[`] back   type to send");
+    UI::footer("[`] esc only   [del]=backspace   type to send");
 }
 
 void Ble::kbKey(const core::KeyEvent& ev) {
@@ -114,6 +114,8 @@ void Ble::kbKey(const core::KeyEvent& ev) {
         case Key::Down:  blekbd::writeSpecial(blekbd::Special::Down);  break;
         case Key::Left:  blekbd::writeSpecial(blekbd::Special::Left);  break;
         case Key::Right: blekbd::writeSpecial(blekbd::Special::Right); break;
+        // Del forwards a real backspace to the host (NOT a screen exit).
+        case Key::Back:  if (ev.ch == '\b') blekbd::writeSpecial(blekbd::Special::Backspace); break;
         case Key::Char:  blekbd::writeAscii((uint8_t)ev.ch);           break;
         default: break;
     }
@@ -144,7 +146,8 @@ core::Signal Ble::onTick(const core::KeyEvent& ev) {
         break;
 
     case View::Keyboard: {
-        if (ev.key == Key::Back) { stopAllBle(); _view = View::Menu; _menu.draw("BLE"); break; }
+        // Only ESC (`) leaves this screen; Del is a backspace sent to the host.
+        if (isEscape(ev)) { stopAllBle(); _view = View::Menu; _menu.draw("BLE"); break; }
         static bool lastLinked = false; static int lastSent = -1;
         if (ev.key != Key::None) kbKey(ev);     // send the keystroke
         bool linked = g_kbUp && blekbd::isConnected();

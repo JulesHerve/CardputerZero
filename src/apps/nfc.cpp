@@ -25,6 +25,12 @@ m5::unit::CapCC1101NFC  g_unit{};
 m5::nfc::NFCLayerA      g_nfc{g_unit};
 bool                    g_begun = false;
 
+// --- live diagnostics (shown on the DIAG screen; -1 == not attempted yet) ----
+int g_diagAddSpi   = -1;
+int g_diagBegin    = -1;
+int g_diagDetect   = -1;
+int g_diagIdentify = -1;
+
 // --- tag emulation (mirrors M5's NFCA/Emulation example) ---
 class EmuA : public m5::nfc::EmulationLayerA {
 public:
@@ -71,6 +77,8 @@ bool Nfc::ensureReader() {
         bool wired = m5::unit::wiring::addSPI(g_units, g_unit, 10000000, 1);
         bool begun = wired && g_units.begin();
         Serial.printf("[NFC] addSPI=%d begin=%d\n", (int)wired, (int)begun);
+        g_diagAddSpi = (int)wired;
+        g_diagBegin  = (int)begun;
         g_begun = begun;
     }
     _ready = g_begun;
@@ -80,11 +88,12 @@ bool Nfc::ensureReader() {
 void Nfc::onEnter() {
     _view = View::Menu;
     if (!_menuBuilt) {
-        _menu.add(core::Icon::Read, "READ",    "UID, type, ATQA / SAK");
-        _menu.add(core::Icon::Dump, "CONTENT", "Decode NDEF text / URL / image");
-        _menu.add(core::Icon::Tx,   "EMULATE", "Present the last-read tag over RF");
-        _menu.add(core::Icon::Info, "SERIAL",  "Full memory dump over USB");
-        _menu.add(core::Icon::Save, "SAVE",    "Log last tag to SD (CSV)");
+        _menu.add(core::Icon::Read,    "READ",    "UID, type, ATQA / SAK");
+        _menu.add(core::Icon::Dump,    "CONTENT", "Decode NDEF text / URL / image");
+        _menu.add(core::Icon::Tx,      "EMULATE", "Present the last-read tag over RF");
+        _menu.add(core::Icon::Analyze, "DUMP",    "Memory dump to USB + SD summary");
+        _menu.add(core::Icon::Info,    "DIAG",    "On-screen reader status (no serial)");
+        _menu.add(core::Icon::Save,    "SAVE",    "Log last tag to SD (CSV)");
         _menuBuilt = true;
     }
     drawMenu();
@@ -105,6 +114,7 @@ void Nfc::readOnce() {
     PICC picc{};
     bool det = g_nfc.detect(picc);
     bool idn = det && g_nfc.identify(picc);
+    g_diagDetect = (int)det; g_diagIdentify = (int)idn;
     Serial.printf("[NFC] detect=%d identify=%d uid=%s type=%s\n",
                   (int)det, (int)idn,
                   idn ? picc.uidAsString().c_str() : "-",
@@ -298,17 +308,68 @@ void Nfc::dumpSerial() {
     UI::banner("Dumping to USB serial...", UI::cAccent());
 
     PICC picc{};
-    if (g_nfc.detect(picc) && g_nfc.identify(picc) && g_nfc.reactivate(picc)) {
+    g_diagDetect = (int)g_nfc.detect(picc);
+    if (g_diagDetect && g_nfc.identify(picc) && g_nfc.reactivate(picc)) {
+        g_diagIdentify = 1;
         Serial.printf("\n==== NFC dump %s %s ====\n",
                       picc.uidAsString().c_str(), picc.typeAsString().c_str());
         g_nfc.dump(m5::nfc::a::mifare::classic::DEFAULT_KEY);
         g_nfc.deactivate();
-        UI::banner("Dump complete\n(see USB serial)", UI::cAccent());
+        // Many users can't open a USB serial monitor, so also drop a short
+        // summary onto the SD card they CAN read on a computer.
+        bool saved = false;
+        if (Storage::isReady()) {
+            char meta[96];
+            snprintf(meta, sizeof(meta), "%s,%s,ATQA=%04X,SAK=%02X,%u-byte\n",
+                     picc.typeAsString().c_str(), picc.uidAsString().c_str(),
+                     picc.atqa, picc.sak, picc.size);
+            saved = Storage::append(std::string(cfg::DIR_NFC) + "/dumps.csv", meta);
+        }
+        UI::banner(saved ? "Dump on USB serial\nsummary -> /czero/nfc/dumps.csv"
+                         : "Dump complete\n(see USB serial)", UI::cAccent());
     } else {
+        g_diagIdentify = 0;
         UI::banner("No tag / identify failed", UI::cWarn());
     }
-    delay(1200);
+    delay(1400);
     drawMenu();
+}
+
+void Nfc::drawDiag() {
+    ensureReader();                    // attempt init so the status is live
+    auto& d = M5Cardputer.Display;
+    UI::clear();
+    UI::header("NFC diagnostics", _ready ? "reader OK" : "reader FAIL");
+    d.setFont(&fonts::Font0);
+    d.setTextDatum(top_left);
+    int y = 22;
+    auto yn = [](int v) -> const char* { return v < 0 ? "-" : (v ? "yes" : "NO"); };
+    char l[64];
+
+    d.setTextColor(_ready ? UI::cText() : UI::cWarn(), UI::cBg());
+    snprintf(l, sizeof(l), "init  addSPI:%s  begin:%s", yn(g_diagAddSpi), yn(g_diagBegin));
+    d.drawString(l, 6, y); y += 13;
+
+    d.setTextColor(UI::cDim(), UI::cBg());
+    snprintf(l, sizeof(l), "SPI CS=G%d  IRQ=G%d  shared bus", cfg::PIN_NFC_CS, cfg::PIN_NFC_IRQ);
+    d.drawString(l, 6, y); y += 13;
+    snprintf(l, sizeof(l), "SD card: %s", Storage::isReady() ? "ready" : "none");
+    d.drawString(l, 6, y); y += 13;
+
+    d.setTextColor(UI::cText(), UI::cBg());
+    snprintf(l, sizeof(l), "last read  detect:%s  id:%s", yn(g_diagDetect), yn(g_diagIdentify));
+    d.drawString(l, 6, y); y += 13;
+
+    if (_haveTag) {
+        d.setTextColor(UI::cAccent(), UI::cBg());
+        d.drawString(("UID " + _lastUid).c_str(), 6, y); y += 13;
+        d.setTextColor(UI::cDim(), UI::cBg());
+        d.drawString(_lastType.c_str(), 6, y);
+    } else {
+        d.setTextColor(UI::cDim(), UI::cBg());
+        d.drawString("no tag read yet - run READ first", 6, y);
+    }
+    UI::footer("[r] re-test reader   [`] back");
 }
 
 core::Signal Nfc::onTick(const core::KeyEvent& ev) {
@@ -325,12 +386,20 @@ core::Signal Nfc::onTick(const core::KeyEvent& ev) {
             case 1: readContent(); break;
             case 2: emulate(); break;
             case 3: dumpSerial(); break;
-            case 4: saveIdentity(); break;
+            case 4: _view = View::Diag; drawDiag(); break;
+            case 5: saveIdentity(); break;
             }
         }
         break;
     case View::Result:
         if (ev.key == Key::Char && (ev.ch == 's' || ev.ch == 'S')) saveIdentity();
+        if (ev.key == Key::Back || ev.key == Key::Ok) { _view = View::Menu; drawMenu(); }
+        break;
+    case View::Diag:
+        if (ev.key == Key::Char && (ev.ch == 'r' || ev.ch == 'R')) {
+            ensureReader();        // retry init if it hasn't come up yet
+            drawDiag();
+        }
         if (ev.key == Key::Back || ev.key == Key::Ok) { _view = View::Menu; drawMenu(); }
         break;
     }
