@@ -39,7 +39,7 @@ private:
 
     // keyboard
     void kbStart();
-    void kbDraw(bool linked);
+    void kbDraw(bool linked, bool ready);
     void kbKey(const core::KeyEvent& ev);
 
     void stopAllBle();           // tear down whatever BLE role was active

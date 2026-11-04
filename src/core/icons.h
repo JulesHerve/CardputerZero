@@ -18,7 +18,7 @@ enum class Icon {
     // actions
     Rx, Tx, Replay, Analyze, Freq, Load, Save,
     Learn, Power, Read, Dump, Scan, Keyboard, Info,
-    Portal, Ap,
+    Portal, Ap, Games,
 };
 
 inline void drawIcon(Icon g, int cx, int cy, uint16_t c) {
@@ -158,6 +158,15 @@ inline void drawIcon(Icon g, int cx, int cy, uint16_t c) {
         d.drawLine(cx - 7, cy + 11, cx - 5, cy + 5, c);   // shoulders
         d.drawLine(cx + 7, cy + 11, cx + 5, cy + 5, c);
         d.drawFastHLine(cx - 7, cy + 11, 14, c);
+        break;
+    case Icon::Games:                    // gamepad
+        d.drawRoundRect(cx - 16, cy - 8, 32, 18, 6, c);
+        // d-pad (left)
+        d.drawFastHLine(cx - 12, cy, 7, c);
+        d.drawFastVLine(cx - 9, cy - 3, 7, c);
+        // two action buttons (right)
+        d.drawCircle(cx + 8, cy - 2, 2, c);
+        d.drawCircle(cx + 12, cy + 2, 2, c);
         break;
     case Icon::Ap: {                     // broadcast tower (one network)
         d.drawLine(cx, cy + 15, cx, cy - 3, c);      // mast

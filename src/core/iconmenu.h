@@ -28,14 +28,18 @@ public:
     int  selection() const { return _sel; }
     int  count() const { return (int)_items.size(); }
 
+    // Override the grid geometry (default 3 columns at 74px). The home screen
+    // uses 4 columns so seven tools+games fit in two rows.
+    void configure(int cols, int cellw) { _cols = cols; _cellw = cellw; }
+
     // Grid move with wrap. dCol/dRow in {-1,0,+1}.
     void move(int dCol, int dRow) {
         int n = count(); if (!n) return;
-        int rows = (n + COLS - 1) / COLS;
-        int col = _sel % COLS, row = _sel / COLS;
-        if (dCol) col = (col + dCol + COLS) % COLS;
+        int rows = (n + _cols - 1) / _cols;
+        int col = _sel % _cols, row = _sel / _cols;
+        if (dCol) col = (col + dCol + _cols) % _cols;
         if (dRow) row = (row + dRow + rows) % rows;
-        int idx = row * COLS + col;
+        int idx = row * _cols + col;
         if (idx >= n) idx = n - 1;      // snap into the last (short) row
         _sel = idx;
     }
@@ -45,14 +49,14 @@ public:
         UI::clear();
         UI::header(title, right);
         int n = count();
-        int rows = (n + COLS - 1) / COLS;
+        int rows = (n + _cols - 1) / _cols;
         int topY = (rows == 1) ? 44 : 22;
         for (int i = 0; i < n; ++i) {
-            int row = i / COLS;
-            int inRow = (row == rows - 1) ? (n - row * COLS) : COLS;
-            int startX = (UI::W - inRow * CELLW) / 2;
-            int col = i % COLS;
-            int cx = startX + col * CELLW + CELLW / 2;
+            int row = i / _cols;
+            int inRow = (row == rows - 1) ? (n - row * _cols) : _cols;
+            int startX = (UI::W - inRow * _cellw) / 2;
+            int col = i % _cols;
+            int cx = startX + col * _cellw + _cellw / 2;
             int tileY = topY + row * CELLH;
             int tileX = cx - 19;
             bool on = (i == _sel);
@@ -63,9 +67,9 @@ public:
     }
 
 private:
-    static constexpr int COLS  = 3;
-    static constexpr int CELLW = 74;
     static constexpr int CELLH = 48;
+    int _cols  = 3;
+    int _cellw = 74;
     std::vector<IconItem> _items;
     int _sel = 0;
 

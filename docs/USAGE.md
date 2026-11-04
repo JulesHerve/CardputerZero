@@ -126,3 +126,31 @@ ENTER / TAB / ESC / SPACE / UP / DOWN / LEFT / RIGHT
 The tool ships with built-in example scripts (shown with a leading `.`) so it
 works even with no SD card; any `.txt` files in `/czero/badusb` on the SD card
 are listed too. See `data/czero/badusb/` for editable examples.
+
+## Games
+
+A **GAMES** icon on the home screen opens a sub-menu: **Snake**, **Tetris**,
+**Flappy**, and a **Doom**-style raycaster FPS demo. Controls in every game:
+
+- `;` up · `.` down · `,` left · `/` right
+- `enter` = action (flap / hard-feel), `` ` `` = quit back to the games menu
+- Keys repeat while held (the games read the keyboard directly each frame).
+
+Each game renders to an off-screen canvas for flicker-free frames and shows a
+GAME OVER card with the score; `enter` retries, `` ` `` quits.
+
+## Troubleshooting
+
+**IR won't learn a remote.** The Cardputer has only an IR *transmit* LED
+(GPIO44) — it has **no built-in IR receiver**. Learning needs an external
+receiver on the Grove port (e.g. the M5Stack IR Unit); the firmware listens on
+`G1` (`PIN_IR_RX`). Point the remote at that unit, not the Cardputer, during
+LEARN. If you only want to *send* (Replay / TV power), no receiver is needed.
+
+**BLE keyboard connects but doesn't type.** After pairing, the header shows
+`pairing` → `linking` → `ready`. Keystrokes are only sent once it reads
+**ready** (the first ~1.2 s after connecting is reserved for the host to finish
+setting up the HID link; keys pressed before then are dropped by the host and
+look like "nothing types"). If it never reaches `ready`, remove/forget
+"CardputerZero" in your device's Bluetooth settings and pair again. The
+`keys sent` counter on screen confirms the device is emitting keystrokes.

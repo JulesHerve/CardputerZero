@@ -104,15 +104,18 @@ void Ir::drawFiles() {
 }
 
 void Ir::learn() {
-    startTx();          // ensure sender pin is configured but idle
+    // IMPORTANT: do NOT start the IR sender here. On the ESP32 the sender's
+    // carrier PWM and the receiver's 50us sampling ISR fight over the same
+    // hardware timer, which stops decode() from ever seeing a frame. Learning
+    // needs the receiver only; the sender is started later in replay().
     startRx();
     UI::clear();
-    UI::header("Learn");
-    UI::banner("Point remote at the\nMini IR Unit, press a key", UI::cAccent());
-    UI::footer("[`] cancel");
+    UI::header("Learn", g_rxStarted ? "listening" : "no RX");
+    UI::banner("Point a remote at the\nGrove IR receiver, press a key", UI::cAccent());
+    UI::footer("needs the Grove IR unit (G1)   [`] cancel");
 
     uint32_t start = millis();
-    while (millis() - start < 10000) {
+    while (millis() - start < 12000) {
         if (IrReceiver.decode()) {
             auto& d = IrReceiver.decodedIRData;
             g_learned = Learned{};

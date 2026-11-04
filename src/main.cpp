@@ -28,6 +28,7 @@
 #include "apps/wifi_scan.h"
 #include "apps/ble.h"
 #include "apps/badusb.h"
+#include "apps/games.h"
 
 using namespace core;
 
@@ -40,8 +41,9 @@ apps::Ir       appIr;
 apps::WifiScan appWifi;
 apps::Ble      appBle;
 apps::BadUsb   appBadUsb;
+apps::Games    appGames;
 
-App* const APPS[] = { &appSubGhz, &appNfc, &appIr, &appWifi, &appBle, &appBadUsb };
+App* const APPS[] = { &appSubGhz, &appNfc, &appIr, &appWifi, &appBle, &appBadUsb, &appGames };
 constexpr int N_APPS = sizeof(APPS) / sizeof(APPS[0]);
 
 IconMenu g_home;
@@ -99,12 +101,14 @@ void setup() {
     Storage::begin();
     loadTheme();                 // apply the saved skin (default = Nothing)
 
+    g_home.configure(4, 58);     // 4-column grid so 7 icons fit in two rows
     g_home.add(Icon::SubGhz, "SUB-GHZ", "Capture & replay 315-915 MHz");
     g_home.add(Icon::Nfc,    "NFC",     "Read tags & NDEF content");
     g_home.add(Icon::Ir,     "IR",      "Learn & replay IR remotes");
     g_home.add(Icon::Wifi,   "WI-FI",   "Scan, guest portal, pun AP");
     g_home.add(Icon::Ble,    "BLE",     "Scan or be a BLE keyboard");
     g_home.add(Icon::Usb,    "USB",     "Bad-USB scripts or live keyboard");
+    g_home.add(Icon::Games,  "GAMES",   "Snake, Tetris, Flappy, Doom");
 
     // Splash.
     UI::clear();

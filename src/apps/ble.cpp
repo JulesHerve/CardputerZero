@@ -82,19 +82,23 @@ void Ble::kbStart() {
     stopAllBle();                       // free the controller before claiming it
     blekbd::begin();                    // the library inits BLE + HID + advertising
     g_bleUp = true; g_kbUp = true;
-    kbDraw(false);
+    kbDraw(false, false);
 }
 
-void Ble::kbDraw(bool linked) {
+void Ble::kbDraw(bool linked, bool ready) {
     auto& d = M5Cardputer.Display;
     UI::clear();
-    UI::header("BLE keyboard", linked ? "linked" : "pairing");
+    UI::header("BLE keyboard", !linked ? "pairing" : (ready ? "ready" : "linking"));
     d.setFont(&fonts::Font2);
     d.setTextDatum(top_left);
     int y = 26;
-    if (linked) {
+    if (ready) {
         d.setTextColor(UI::cAccent(), UI::cBg());
         d.drawString("Connected - type away", 8, y); y += 20;
+    } else if (linked) {
+        d.setTextColor(UI::cWarn(), UI::cBg());
+        d.drawString("Linking - wait for", 8, y); y += 18;
+        d.drawString("\"ready\" then type", 8, y); y += 20;
     } else {
         d.setTextColor(UI::cDim(), UI::cBg());
         d.drawString("Pair \"CardputerZero\"", 8, y); y += 18;
@@ -148,12 +152,22 @@ core::Signal Ble::onTick(const core::KeyEvent& ev) {
     case View::Keyboard: {
         // Only ESC (`) leaves this screen; Del is a backspace sent to the host.
         if (isEscape(ev)) { stopAllBle(); _view = View::Menu; _menu.draw("BLE"); break; }
-        static bool lastLinked = false; static int lastSent = -1;
-        if (ev.key != Key::None) kbKey(ev);     // send the keystroke
+        static bool lastLinked = false, lastReady = false; static int lastSent = -1;
+        static uint32_t linkedSince = 0;
+
         bool linked = g_kbUp && blekbd::isConnected();
-        int  sent   = blekbd::sentCount();
-        if (linked != lastLinked || sent != lastSent) {
-            lastLinked = linked; lastSent = sent; kbDraw(linked);
+        if (linked && linkedSince == 0) linkedSince = millis();
+        if (!linked) linkedSince = 0;
+        // Give the HID link ~1.2s to finish encryption/notification setup before
+        // sending; keystrokes typed during that window are otherwise dropped by
+        // the host and look like "connects but doesn't type".
+        bool ready = linked && (millis() - linkedSince > 1200);
+
+        if (ready && ev.key != Key::None) kbKey(ev);   // send only once ready
+        int sent = blekbd::sentCount();
+        if (linked != lastLinked || ready != lastReady || sent != lastSent) {
+            lastLinked = linked; lastReady = ready; lastSent = sent;
+            kbDraw(linked, ready);
         }
         break;
     }
